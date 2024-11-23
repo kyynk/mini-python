@@ -33,3 +33,6 @@ minipython.exe
 
 # output of make tests
 out
+
+# output of tests
+*.out
