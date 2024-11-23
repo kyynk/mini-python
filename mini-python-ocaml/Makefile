@@ -6,6 +6,12 @@ all: minipython.exe
 tests: minipython.exe
 	bash run-tests "dune exec ./minipython.exe"
 
+parse: minipython.exe
+	./minipython.exe --parse-only test.py
+
+type: minipython.exe
+	./minipython.exe --type-only test.py
+
 minipython.exe:
 	dune build minipython.exe
 
