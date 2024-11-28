@@ -17,7 +17,7 @@ let error ?(loc=dummy_loc) f =
 module Env = Map.Make(String)
 
 type tenv = {
-  vars: var Env.t;  (* Maps variable names to their metadata *)
+  vars: var Env.t;   (* Maps variable names to their metadata *)
   fns: fn Env.t;     (* Maps function names to their metadata *)
 }
 
@@ -29,6 +29,11 @@ let lookup_var env name loc =
 let lookup_fn env name loc =
   try Env.find name env.fns
   with Not_found -> error ~loc "unbound function %s" name
+
+let add_var env name var =
+  if Env.mem name env.vars then
+    error ~loc:dummy_loc "variable %s already defined" name;
+  { env with vars = Env.add name var env.vars }
 
 (* Typing expressions *)
 let rec type_expr (env: tenv) (expr: expr) : texpr =
@@ -62,64 +67,53 @@ let rec type_expr (env: tenv) (expr: expr) : texpr =
       let te2 = type_expr env e2 in
       TEget (te1, te2)
 
-
-(* Helper function to merge two environments *)
-let merge_envs (env1: tenv) (env2: tenv) : tenv =
-  let merged_vars =
-    Env.union
-      (fun _ v1 _ -> Some v1)
-      env1.vars env2.vars
-  in
-  { env1 with vars = merged_vars }
-
 (* Typing statements *)
 let rec type_stmt_with_env (env: tenv) (stmt: stmt) : tenv * tstmt =
-  print_endline "statement";
   match stmt with
   | Sif (e, s1, s2) ->
       let te = type_expr env e in
+      print_endline "expr";
       let env1, ts1 = type_stmt_with_env env s1 in
-      let env2, ts2 = type_stmt_with_env env s2 in
-      let merged_env = merge_envs env1 env2 in
-      merged_env, TSif (te, ts1, ts2)
+      print_endline "s1";
+      let env2, ts2 = type_stmt_with_env env1 s2 in
+      print_endline "s2";
+      env2, TSif (te, ts1, ts2)
   | Sreturn e ->
       let te = type_expr env e in
       env, TSreturn te
   | Sassign (id, e) ->
       print_endline ("assign " ^ id.id);
-      let v =
-        try lookup_var env id.id id.loc
-        with _ ->
-          let v = { v_name = id.id; v_ofs = 0 } in
-          v
-      in
       let te = type_expr env e in
-      let new_env = { env with vars = Env.add id.id v env.vars } in
-      new_env, TSassign (v, te)
+      let env, v =
+        try
+          (env, lookup_var env id.id id.loc)
+        with Error _ ->
+          let new_v = { v_name = id.id; v_ofs = 0 } in
+          let new_env = add_var env id.id new_v in
+          (new_env, lookup_var new_env id.id id.loc)
+      in
+      env, TSassign (v, te)
   | Sprint e ->
       let te = type_expr env e in
       env, TSprint te
   | Sblock stmts ->
-      (* let local_env = { env with vars = env.vars } in
-      let tstmts = List.map (type_stmt local_env) stmts in *)
-      let local_env, tstmts =
-        List.fold_left
-          (fun (acc_env, acc_stmts) stmt ->
-            let new_env, tstmt = type_stmt_with_env acc_env stmt in
-            new_env, acc_stmts @ [tstmt])
-          (env, []) stmts
+      (* let tstmts = List.map (type_stmt_with_env env) stmts in
+      TSblock tstmts *)
+      let rec type_stmts env stmts =
+        match stmts with
+        | [] -> env, []
+        | s :: ss ->
+            let env1, ts = type_stmt_with_env env s in
+            let env2, tss = type_stmts env1 ss in
+            env2, ts :: tss
       in
-      local_env, TSblock tstmts
+      let new_env, tstmts = type_stmts env stmts in
+      new_env, TSblock tstmts
   | Sfor (id, e, s) ->
-      (* let te = type_expr env e in
-      let v = { v_name = id.id; v_ofs = 0 } in
-      let env' = { env with vars = Env.add id.id v env.vars } in
-      let ts = type_stmt env' s in
-      TSfor (v, te, ts) *)
       let te = type_expr env e in
       let v = { v_name = id.id; v_ofs = 0 } in
-      let env' = { env with vars = Env.add id.id v env.vars } in
-      let new_env, ts = type_stmt_with_env env' s in
+      let for_env = add_var env id.id v in
+      let new_env, ts = type_stmt_with_env for_env s in
       new_env, TSfor (v, te, ts)
   | Seval e ->
       let te = type_expr env e in

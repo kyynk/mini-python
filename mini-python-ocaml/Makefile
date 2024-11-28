@@ -12,6 +12,11 @@ type: minipython.exe
 minipython.exe:
 	dune build minipython.exe
 
+test_typing: minipython.exe
+	@echo "Running tests..."
+	cd tests-mini-python && bash ./test -2 ../minipython.exe
+	cd ..
+
 clean:
 	dune clean
 
