@@ -12,9 +12,8 @@ type: minipython.exe
 minipython.exe:
 	dune build minipython.exe
 
-test_typing:
+test_typing: minipython.exe
 	@echo "Running tests..."
-	dune clean && dune build
 	cd tests-mini-python && ./test -2 ../minipython.exe
 	cd ..
 
