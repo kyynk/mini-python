@@ -49,11 +49,11 @@ let find_var (env:env_t) (id:string) : var option =
 let add_fn (env:env_t) (id:string) (f:fn) : env_t =
   {env with funcs = StringMap.add id f env.funcs}
 
-let find_fn (env:env_t) (id:string) : fn =
+let find_fn (env:env_t) (id:string) loc : fn =
   try
     StringMap.find id env.funcs
   with Not_found ->
-    error ~loc:dummy_loc "unbound function %s" id
+    error ~loc "unbound function %s" id
 
 (* type of typed expressions *)
 let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
@@ -73,7 +73,7 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
     let te, env = type_expr env e in
     TEunop (op, te), env
   | Ecall (id, args) ->
-    let fn = find_fn env id.id in
+    let fn = find_fn env id.id id.loc in
     let targs, env = List.fold_left (fun (acc, env) arg ->
       let targ, env = type_expr env arg in
       targ::acc, env
