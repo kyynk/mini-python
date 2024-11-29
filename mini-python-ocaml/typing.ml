@@ -125,7 +125,7 @@ let rec type_stmt (env:env_t) (stmt: Ast.stmt) : Ast.tstmt * env_t =
         let tstmts, env'' = type_block stmts env' in
         tstmt::tstmts, env''
     in
-    let stmts', _ = type_block stmts env in
+    let stmts', env = type_block stmts env in
     TSblock stmts', env
   | Sfor (id, e, body) ->
     let te, env = type_expr env e in
@@ -167,7 +167,7 @@ let type_file (env:env_t) ((defs, main_stmt): Ast.file) : Ast.tfile =
     fn_params = [];
   } in
   let env  = {env with funcs = StringMap.add "main" main_fn global_env.funcs} in
-  let tstmt = fst (type_stmt env main_stmt) in
+  let tstmt, _ = type_stmt env main_stmt in
   let main_tdef = (main_fn, tstmt) in
   List.rev (main_tdef::tdefs)
 
