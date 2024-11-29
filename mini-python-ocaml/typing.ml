@@ -18,7 +18,7 @@ module Env = Map.Make(String)
 
 type tenv = {
   vars: var Env.t;   (* Maps variable names to their metadata *)
-  fns: fn Env.t;     (* Maps function names to their metadata *)
+  fns: fn list Env.t;     (* Maps function names to their metadata *)
 }
 
 (* Utility functions to look up variables and functions *)
@@ -26,14 +26,32 @@ let lookup_var env name loc =
   try Env.find name env.vars
   with Not_found -> error ~loc "unbound variable %s" name
 
-let lookup_fn env name loc =
-  try Env.find name env.fns
-  with Not_found -> error ~loc "unbound function %s" name
+let lookup_fn env name params loc =
+  match Env.find_opt name env.fns with
+  | Some overloads ->
+      (try
+          List.find (fun f -> List.length f.fn_params = List.length params) overloads
+        with Not_found ->
+          error ~loc "no matching function %s found for the given parameters" name)
+  | None -> error ~loc "unbound function %s" name
 
 let add_var env name var =
   if Env.mem name env.vars then
     error ~loc:dummy_loc "variable %s already defined" name;
   { env with vars = Env.add name var env.vars }
+
+let add_fn env name fn =
+  (* Retrieve existing overloads or start with an empty list *)
+  let overloads = match Env.find_opt name env.fns with
+    | Some fns -> fns
+    | None -> []
+  in
+  (* Check if an overload with the same parameters already exists *)
+  if List.exists (fun f -> f.fn_params = fn.fn_params) overloads then
+    error ~loc:dummy_loc
+      "function %s with the same parameters already defined" name;
+  (* Add the new function to the overload list *)
+  { env with fns = Env.add name (fn :: overloads) env.fns }
 
 (* Typing expressions *)
 let rec type_expr (env: tenv) (expr: expr) : texpr =
@@ -50,13 +68,7 @@ let rec type_expr (env: tenv) (expr: expr) : texpr =
       let te = type_expr env e in
       TEunop (op, te)
   | Ecall (id, args) ->
-      let f = lookup_fn env id.id id.loc in
-      let expected = List.length f.fn_params in
-      let actual = List.length args in
-      if expected <> actual then
-        error ~loc:id.loc
-          "function %s expects %d arguments but got %d"
-          id.id expected actual;
+      let f = lookup_fn env id.id args id.loc in
       let targs = List.map (type_expr env) args in
       TEcall (f, targs)
   | Elist elst ->
@@ -140,8 +152,9 @@ let type_def (env: tenv) (id, params, body: def) : fn * tstmt =
       env.vars params
   in
   let f = { fn_name = id.id; fn_params = List.map (fun p -> Env.find p.id vars) params } in
-  let env' = { vars; fns = Env.add id.id f env.fns } in
-  let tbody = type_stmt env' body in
+  let new_env = { env with vars } in
+  let new_env = add_fn new_env id.id f in
+  let tbody = type_stmt new_env body in
   (f, tbody)
 
 
@@ -152,6 +165,7 @@ let file ?debug:(b=false) (p: Ast.file) : Ast.tfile =
   let (defs, main) = p in
   let env = { vars = Env.empty; fns = Env.empty } in
   let tdefs = List.map (type_def env) defs in
+  let env = List.fold_left (fun env (f, _) -> add_fn env f.fn_name f) env tdefs in
   let tmain = type_stmt env main in
   tdefs @ [ ({ fn_name = "main"; fn_params = [] }, tmain) ]
 

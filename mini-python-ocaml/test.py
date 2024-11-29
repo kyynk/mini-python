@@ -1,11 +1,10 @@
-x = 0
-if 1 < 2:
-   x = 1
-else:
-   y = 2
-if 1 < 2:
-   print(x)
-else:
-   print(y)
+
+def f(x):
+    if False:
+       return x
+    x = 1
+    return x
+print(f(0))
+
 
 print("hello, world")
