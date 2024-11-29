@@ -55,6 +55,14 @@ let find_fn (env:env_t) (id:string) loc : fn =
   with Not_found ->
     error ~loc "unbound function %s" id
 
+let rec expr_is_true (te:Ast.texpr) : bool =
+  match te with
+  | TEcst (Cbool b) -> b
+  | _ -> false
+
+let expr_is_false (te:Ast.texpr) : bool =
+  not (expr_is_true te)
+
 (* type of typed expressions *)
 let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
   match expr with
@@ -64,6 +72,48 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
     begin match find_var env id.id with
       | Some v -> TEvar v, env
       | None -> error ~loc:id.loc "unbound variable %s" id.id
+    end
+  | Ebinop (Ast.Beq, e1, e2) -> (* == *)
+    let te1, env = type_expr env e1 in
+    let te2, env = type_expr env e2 in
+    TEcst (Cbool (te1 = te2)), env
+  | Ebinop (Ast.Bneq, e1, e2) -> (* != *)
+    let te1, env = type_expr env e1 in
+    let te2, env = type_expr env e2 in
+    TEcst (Cbool (te1 <> te2)), env
+  | Ebinop (Ast.Blt, e1, e2) -> (* < *)
+    let te1, env = type_expr env e1 in
+    let te2, env = type_expr env e2 in
+    TEcst (Cbool (te1 < te2)), env
+  | Ebinop (Ast.Ble, e1, e2) -> (* <= *)
+    let te1, env = type_expr env e1 in
+    let te2, env = type_expr env e2 in
+    TEcst (Cbool (te1 <= te2)), env
+  | Ebinop (Ast.Bgt, e1, e2) -> (* > *)
+    let te1, env = type_expr env e1 in
+    let te2, env = type_expr env e2 in
+    TEcst (Cbool (te1 > te2)), env
+  | Ebinop (Ast.Bge, e1, e2) -> (* >= *)
+    let te1, env = type_expr env e1 in
+    let te2, env = type_expr env e2 in
+    TEcst (Cbool (te1 >= te2)), env
+  | Ebinop (Ast.Band, e1, e2) -> (* and *)
+    let te1, env = type_expr env e1 in
+    begin
+      if expr_is_false te1 then
+        TEcst (Cbool false), env
+      else
+      let te2, env = type_expr env e2 in
+        TEcst (Cbool (expr_is_true te2)), env
+    end
+  | Ebinop (Ast.Bor, e1, e2) -> (* or *)
+    let te1, env = type_expr env e1 in
+    begin
+      if expr_is_true te1 then
+        TEcst (Cbool true), env
+      else
+      let te2, env = type_expr env e2 in
+        TEcst (Cbool (expr_is_true te2)), env
     end
   | Ebinop (op, e1, e2) ->
     let te1, env = type_expr env e1 in
@@ -83,7 +133,6 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
       error ~loc:id.loc "function %s expects %d arguments but got %d" id.id (List.length fn.fn_params) (List.length targs)
     else
     TEcall (fn, targs), env
-
   | Elist l ->
     List.fold_left (fun (acc, env) e ->
       let te, env = type_expr env e in
