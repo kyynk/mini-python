@@ -123,22 +123,41 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
     let te, env = type_expr env e in
     TEunop (op, te), env
   | Ecall (id, args) ->
-    let process_builtin fn_name expected_args_count =
-      let targs, env = List.fold_left (fun (acc, env) arg ->
-        let targ, env = type_expr env arg in
-        targ :: acc, env
-      ) ([], env) args in
-      let targs = List.rev targs in
-      if List.length targs <> expected_args_count then
-        error ~loc:id.loc "function %s expects %d argument(s) but got %d" fn_name expected_args_count (List.length targs)
-      else
-        TEcall ({fn_name = fn_name; fn_params = []}, targs), env
-    in
     begin match id.id with
       | "len" ->
-        process_builtin "len" 1
+        let targs, env = List.fold_left (fun (acc, env) arg ->
+          let targ, env = type_expr env arg in
+          targ :: acc, env
+        ) ([], env) args in
+        let targs = List.rev targs in
+        if List.length targs <> 1 then
+          error ~loc:id.loc "function %s expects %d argument(s) but got %d" id.id 1 (List.length targs)
+        else
+          TEcall ({fn_name = "len"; fn_params = []}, targs), env
       | "range" ->
-        process_builtin "range" 1
+        let targs, env = List.fold_left (fun (acc, env) arg ->
+          let targ, env = type_expr env arg in
+          targ :: acc, env
+        ) ([], env) args in
+        let targs = List.rev targs in
+        if List.length targs <> 1 then
+          error ~loc:id.loc "function %s expects %d argument(s) but got %d" id.id 1 (List.length targs)
+        else
+          TErange (List.hd targs), env
+      | "list" ->
+        let targs, env = List.fold_left (fun (acc, env) arg ->
+          let targ, env = type_expr env arg in
+          targ :: acc, env
+        ) ([], env) args in
+        if List.length targs <> 1 then
+          error ~loc:id.loc "function %s expects at least %d argument(s) but got %d" id.id 1 (List.length targs)
+        else
+          begin match List.hd targs with
+          | TEcst _ ->
+              error ~loc:id.loc "cannot create list from constant"
+          | _ ->
+              TEcall ({fn_name = "list"; fn_params = []}, targs), env
+          end
       | _ ->
         let fn = find_fn env id.id id.loc in
         let targs, env = List.fold_left (fun (acc, env) arg ->
