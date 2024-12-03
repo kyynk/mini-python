@@ -52,7 +52,7 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
     let v = try
       StringMap.find id.id env.vars
     with Not_found ->
-      error "unbound variable %s" id.id
+      error ~loc:id.loc "unbound variable %s" id.id
     in
     TEvar v, env
   | Ebinop (op, e1, e2) ->
@@ -71,7 +71,7 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
         ) ([], env) args in
         let targs = List.rev targs in
         if List.length targs <> 1 then
-          error "function %s expects %d argument(s) but got %d" id.id 1 (List.length targs)
+          error ~loc:id.loc "function %s expects %d argument(s) but got %d" id.id 1 (List.length targs)
         else
           TEcall ({fn_name = "len"; fn_params = []}, targs), env
       | "range" ->
@@ -81,7 +81,7 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
         ) ([], env) args in
         let targs = List.rev targs in
         if List.length targs <> 1 then
-          error "function %s expects %d argument(s) but got %d" id.id 1 (List.length targs)
+          error ~loc:id.loc "function %s expects %d argument(s) but got %d" id.id 1 (List.length targs)
         else
           TErange (List.hd targs), env
       | "list" ->
@@ -90,11 +90,11 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
           targ :: acc, env
         ) ([], env) args in
         if List.length targs <> 1 then
-          error "function %s expects at least %d argument(s) but got %d" id.id 1 (List.length targs)
+          error ~loc:id.loc "function %s expects at least %d argument(s) but got %d" id.id 1 (List.length targs)
         else
           begin match List.hd targs with
           | TEcst _ ->
-              error "cannot create list from constant"
+              error ~loc:id.loc "cannot create list from constant"
           | _ ->
               TEcall ({fn_name = "list"; fn_params = []}, targs), env
           end
@@ -103,7 +103,7 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
           try
             StringMap.find id.id env.funcs
           with Not_found ->
-            error "unbound function %s" id.id
+            error ~loc:id.loc "unbound function %s" id.id
           in
         let targs, env = List.fold_left (fun (acc, env) arg ->
         let targ, env = type_expr env arg in
@@ -111,7 +111,7 @@ let rec type_expr (env:env_t) (expr: Ast.expr) : Ast.texpr * env_t =
         ) ([], env) args in
         let targs = List.rev targs in
         if List.length targs <> List.length fn.fn_params then
-          error "function %s expects %d argument(s) but got %d" id.id (List.length fn.fn_params) (List.length targs)
+          error ~loc:id.loc "function %s expects %d argument(s) but got %d" id.id (List.length fn.fn_params) (List.length targs)
         else
           TEcall (fn, targs), env
     end
@@ -177,7 +177,7 @@ let rec type_stmt (env:env_t) (stmt: Ast.stmt) : Ast.tstmt * env_t =
 let type_def (env:env_t) ((fn_name, fn_params, body): Ast.def) : Ast.tdef * env_t =
   let fn_params_vars = List.map (fun id -> {v_name = id.id; v_ofs = 0}) fn_params in
   if List.length fn_params_vars <> List.length (List.sort_uniq (fun v1 v2 -> String.compare v1.v_name v2.v_name) fn_params_vars) then
-    error "duplicated parameter name in function %s" fn_name.id;
+    error ~loc:fn_name.loc "duplicated parameter name in function %s" fn_name.id;
   let fn = {fn_name = fn_name.id; fn_params = fn_params_vars} in
   let env_with_fn = {env with funcs = StringMap.add fn_name.id fn env.funcs} in
   let local_env = {
