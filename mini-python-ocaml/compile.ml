@@ -26,61 +26,72 @@ let tag_bool = Int64.of_int 1
 let tag_int = Int64.of_int 2
 let tag_str = Int64.of_int 3
 
-let unique_string_label env =
-  let lbl = Printf.sprintf ".Lstr%d" env.string_counter in
-  env.string_counter <- env.string_counter + 1;
-  lbl
+let unique_string_label (env:env_t) s : X86_64.data =
+  let n = env.string_counter in
+  env.string_counter <- n + 1;
+  label (Printf.sprintf "str%d" n)
 
-let compile_const (c: Ast.constant) : X86_64.text =
+let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data =
   match c with
   | Cint i ->
-    movq (imm64 i) (ind ~ofs:(0) rax)
+    movq (imm64 i) (ind ~ofs:(0) rax), nop
+  (* | Cstring s ->
+    let data_code = unique_string_label env s in *)
+    (* data_code ++ string s, nop *)
   | _ ->
     failwith "Unsupported constant"
 
-let compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text =
+let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data =
+  if StringMap.mem v.v_name env.vars then
+    let var, ofs = StringMap.find v.v_name env.vars in
+    movq (ind ~ofs:(-ofs) rbp) (reg rax), nop
+  else
+    failwith "Variable not found"
+let compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data =
   match expr with
   | TEcst c ->
-    compile_const c
+    compile_const env c
   | TEvar v ->
-    let var, ofs = StringMap.find v.v_name env.vars in
-    movq (ind ~ofs:(-ofs) rbp) (reg rax)
+    compile_var env v
   | _ ->
     failwith "Unsupported expression"
 
-let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text =
+let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
   | TSassign (var, expr) ->
     if StringMap.mem var.v_name env.vars then
       let var, ofs = StringMap.find var.v_name env.vars in
-      let expr_code = compile_expr env expr in
-      expr_code ++ movq (reg rax) (ind ~ofs:(-ofs) rbp)
+      let text_code, data_code = compile_expr env expr in
+      text_code ++ movq (reg rax) (ind ~ofs:(-ofs) rbp), data_code
     else
       (* create a new var in env *)
       let ofs = env.stack_offset - 8 in
       env.stack_offset <- ofs;
       env.vars <- StringMap.add var.v_name (var, ofs) env.vars;
       (* compile *)
-      let expr_code = compile_expr env expr in
+      let text_code, data_code = compile_expr env expr in
       movq (imm 8) (reg rdi) ++
       call "my_malloc" ++
       subq (imm 8) (reg rbp) ++
       movq (reg rax) (ind ~ofs:(ofs) rbp) ++
-      expr_code
+      text_code, data_code
   | TSblock stmts ->
-    List.fold_left (fun acc stmt -> acc ++ compile_stmt env stmt) nop stmts
+    List.fold_left (fun (acc_text, acc_data) stmt ->
+      let text_code, data_code = compile_stmt env stmt in
+      acc_text ++ text_code, acc_data ++ data_code
+    ) (nop, nop) stmts
   | TSprint expr ->
-    let expr_code = compile_expr env expr in
-    expr_code ++
+    let text_code, data_code = compile_expr env expr in
+    text_code ++
     movq (ind ~ofs:(-8) rbp) (reg rax) ++
     movq (ind rax) (reg rsi) ++
     leaq (lab "print_int") rdi ++
     call "printf" ++
-    addq (imm 8) (reg rbp)
+    addq (imm 8) (reg rbp), data_code
   | _ ->
     failwith "Unsupported statement"
-let compile_def env ((fn, body): Ast.tdef) : X86_64.text =
-  let env = { env with vars = StringMap.empty; stack_offset = 0 } in
+let compile_def env ((fn, body): Ast.tdef) : X86_64.text * X86_64.data =
+  let env_local = { env with vars = StringMap.empty; stack_offset = 0 } in
   let prologue = 
     pushq (reg rbp) ++
     movq (reg rsp) (reg rbp) in
@@ -89,8 +100,8 @@ let compile_def env ((fn, body): Ast.tdef) : X86_64.text =
     movq (reg rbp) (reg rsp) ++
     popq rbp ++
     ret in
-  let body_code = compile_stmt env body in
-  label fn.fn_name ++ prologue ++ body_code ++ epilogue
+  let body_code, data_code = compile_stmt env_local body in
+  label fn.fn_name ++ prologue ++ body_code ++ epilogue, data_code
 
 let custom_malloc : X86_64.text =
   label "my_malloc" ++
@@ -108,8 +119,8 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   let env = empty_env in
   (* Compile each function *)
   let text_code, data_code = List.fold_left (fun (text_acc, data_acc) (fn, body) ->
-    let fn_code = compile_def env (fn, body) in
-    (text_acc ++ fn_code, data_acc)
+    let fn_code, data_code = compile_def env (fn, body) in
+    (text_acc ++ fn_code, data_acc ++ data_code)
   ) (nop, nop) p in
   { text = 
   custom_malloc ++

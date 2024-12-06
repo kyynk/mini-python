@@ -12,12 +12,7 @@ my_malloc:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	movq $8, %rdi
-	call my_malloc
-	subq $8, %rbp
-	movq %rax, -8(%rbp)
-	movq $85, 0(%rax)
-	movq 8(%rbp), %rax
+	movq $42, 0(%rax)
 	movq -8(%rbp), %rax
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi
