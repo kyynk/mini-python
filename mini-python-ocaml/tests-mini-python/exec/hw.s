@@ -3,7 +3,6 @@ my_malloc:
 	pushq %rbp
 	movq %rsp, %rbp
 	andq $-16, %rsp
-#allign rsp to 16 bytes
 	call malloc
 	testq %rax, %rax
 	movq %rbp, %rsp
@@ -13,13 +12,7 @@ my_malloc:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	movq $8, %rdi
-	call my_malloc
-	subq $8, %rbp
-	movq %rax, -8(%rbp)
-	movq $85, 0(%rax)
-#put value at the address rax is pointing
-	movq 8(%rbp), %rax
+	leaq str0, %rax
 	movq -8(%rbp), %rax
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi
@@ -30,5 +23,7 @@ main:
 	popq %rbp
 	ret
 	.data
+str0:
+	.string "hello, world"
 print_int:
 	.string " %d\n"
