@@ -17,6 +17,11 @@ test_typing: minipython.exe
 	cd tests-mini-python && ./test -2 ../minipython.exe
 	cd ..
 
+test_compile: minipython.exe
+	@echo "Running tests..."
+	cd tests-mini-python && ./test -3 ../minipython.exe
+	cd ..
+
 clean:
 	dune clean
 
