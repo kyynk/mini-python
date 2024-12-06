@@ -11,14 +11,14 @@
 (** {1 Code } *)
 
 type 'a asm
-  (** type abstrait du code assembleur.
-      Le paramètre ['a] est utilisé comme type fantôme. *)
+  (** abstract type of assembler code.
+    The parameter ['a] is used as a phantom type. *)
 
 type text = [ `text ] asm
-  (** du code assembleur se trouvant dans la zone de texte *)
+  (** assembler code located in the text section *)
 
 type data = [ `data ] asm
-  (** du code assembleur se trouvant dans la zone de données *)
+  (** assembler code located in the data section *)
 
 type label = string
   (** les étiquettes d'addresses sont des chaînes de caractères *)
@@ -135,7 +135,7 @@ type 'size operand
   (** Le type abstrait des opérandes *)
 
 val imm: int -> [>] operand
-  (** opérande immédiate $i *)
+  (** immediate operand $i *)
 
 val imm32: int32 -> [>] operand
   (** opérande immédiate $i *)
@@ -152,10 +152,10 @@ val ind: ?ofs:int -> ?index:'size1 register -> ?scale:int ->
   (** opérande indirecte ofs(register, index, scale) *)
 
 val lab: label -> [>] operand
-  (** étiquette L  *)
+  (** label L  *)
 
 val ilab: label -> [`Q] operand
-  (** étiquette immédiate $L *)
+  (** immediate label $L *)
 
 (** {1 Instructions } *)
 
@@ -351,14 +351,14 @@ val popq : [`Q] register -> text
 (** {2 Divers } *)
 
 val label : label -> [> ] asm
-  (** un label. Peut se retrouver dans du text ou du data *)
+  (** a label. Can be found in text or data *)
 
 val globl : label -> [> ] asm
-  (** déclaration .globl (pour main, typiquement) *)
+  (** .globl declaration (typically for main) *)
 
 val comment : string -> [> ] asm
-  (** place un commentaire dans le code généré. Peut se retrouver dans
-      du text ou du data *)
+  (** places a comment in the generated code. Can be found in
+    text or data *)
 
 (** {2 Données } *)
 
