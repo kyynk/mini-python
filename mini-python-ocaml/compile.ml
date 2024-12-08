@@ -8,7 +8,7 @@ let debug = ref false
 module StringMap = Map.Make(String)
 
 type env_t = {
-  mutable vars: (var * int) StringMap.t;
+  mutable vars: (var * int * int) StringMap.t;
   funcs: fn StringMap.t;
   mutable stack_offset: int;
   mutable string_counter: int;
@@ -21,35 +21,55 @@ let empty_env = {
   string_counter = 0;
 }
 
-let tag_none = Int64.of_int 0
-let tag_bool = Int64.of_int 1
-let tag_int = Int64.of_int 2
-let tag_str = Int64.of_int 3
-
 let unique_string_label (env:env_t) (s:string) : X86_64.data =
   let n = env.string_counter in
   env.string_counter <- n + 1;
   label (Printf.sprintf "str%d" n)
 
-let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data =
+let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * int =
   match c with
+  | Cnone ->
+    (* tbd *)
+    movq (imm 0) (ind ~ofs:(0) rax), nop, 0
+  | Cbool b ->
+    (* tbd *)
+    movq (imm64 (if b then 1L else 0L)) (ind ~ofs:(0) rax), nop, 1
   | Cint i ->
-    movq (imm64 i) (ind ~ofs:(0) rax) ++ comment ("put value at the address rax is pointing"), nop
-  | Cstring s ->
+    env.stack_offset <- env.stack_offset + 8;
+    movq (imm 8) (reg rdi) ++
+    call "my_malloc" ++
+    movq (imm64 i) (ind ~ofs:(0) rax) ++
+    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    , nop, 2
+  (* | Cstring s ->
+    let text_code =
+      leaq (lab (Printf.sprintf "str%d" (env.string_counter - 1))) rax in
     let data_code = 
       unique_string_label env s ++
       string s in
-    leaq (lab (Printf.sprintf "str%d" (env.string_counter - 1))) rax, data_code
-  | _ ->
-    failwith "Unsupported constant"
+    text_code, data_code *)
+  | _ -> failwith "Unsupported constant"
 
-let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data =
+let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * int =
   if StringMap.mem v.v_name env.vars then
-    let var, ofs = StringMap.find v.v_name env.vars in
-    movq (ind ~ofs:(-ofs) rbp) (reg rax), nop
+    begin
+      let var, ofs, var_type = StringMap.find v.v_name env.vars in
+      (* if var_type = 1 then
+        comment "bool" ++
+        movq (ind ~ofs:(ofs) rbp) (reg rax), nop *)
+      if var_type = 2 then
+        comment "int" ++
+        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
+      else
+        failwith "Unsupported var type"
+    end
   else
     failwith "Variable not found"
-let compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data =
+    (* let ofs = -env.stack_offset in
+    env.vars <- StringMap.add v.v_name (v, ofs, 2) env.vars;
+    movq (ind ~ofs:(ofs) rbp) (reg rax), nop, 2 *)
+
+let compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * int =
   match expr with
   | TEcst c ->
     compile_const env c
@@ -74,44 +94,37 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     failwith "Unsupported Sif"
   | TSreturn expr ->
     failwith "Unsupported Sreturn"
-  | TSassign (var, expr) ->
-    let text_code, data_code = compile_expr env expr in
-    if StringMap.mem var.v_name env.vars then
-      let var, ofs = StringMap.find var.v_name env.vars in
-      text_code ++ movq (reg rax) (ind ~ofs:(-ofs) rbp), data_code
-    else
-      (* create a new var in env *)
-      let ofs = env.stack_offset - 8 in
-      env.stack_offset <- ofs;
-      env.vars <- StringMap.add var.v_name (var, ofs) env.vars;
-      (* compile *)
-      (* tbd: should be able to tell how many bytes to needed, mabye calculate this in the start of compile_def? *)
-      movq (imm 8) (reg rdi) ++
-      call "my_malloc" ++
-      subq (imm 8) (reg rbp) ++
-      movq (reg rax) (ind ~ofs:(ofs) rbp) ++
-      text_code, data_code
+  | TSassign (var, expr) -> (* x = 1 *)
+    let text_code, data_code, expr_type = compile_expr env expr in
+    let ofs = -env.stack_offset in
+    env.vars <- StringMap.add var.v_name (var, ofs, expr_type) env.vars;
+    text_code, data_code
   | TSprint expr ->
-    let text_code, data_code = compile_expr env expr in
+    let text_code, data_code, expr_type = compile_expr env expr in
+    (* format string required *)
     text_code ++
-    movq (ind ~ofs:(-8) rbp) (reg rax) ++
     movq (ind rax) (reg rsi) ++
     leaq (lab "print_int") rdi ++
-    call "printf" ++
-    addq (imm 8) (reg rbp), data_code
+    call "printf", data_code
   | TSblock stmts ->
     List.fold_left (fun (acc_text, acc_data) stmt ->
       let text_code, data_code = compile_stmt env stmt in
       acc_text ++ text_code, acc_data ++ data_code
     ) (nop, nop) stmts
+    |> fun (text_code, data_code) -> 
+      subq (imm (env.stack_offset)) (reg rsp) ++
+      text_code ++
+      addq (imm (env.stack_offset)) (reg rsp)
+      , data_code
   | TSfor (var, expr, body) ->
     failwith "Unsupported Sfor"
   | TSeval expr ->
     failwith "Unsupported TSeval"
   | TSset (e1, e2, e3) ->
     failwith "Unsupported TSset"
+
 let compile_def env ((fn, body): Ast.tdef) : X86_64.text * X86_64.data =
-  let env_local = { env with vars = StringMap.empty; stack_offset = 0 } in
+  let env_local = { env with vars = StringMap.empty; } in
   let prologue = 
     pushq (reg rbp) ++
     movq (reg rsp) (reg rbp) in
