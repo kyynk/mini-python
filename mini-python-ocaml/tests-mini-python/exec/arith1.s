@@ -23,9 +23,9 @@ printf_wrapper:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $32, %rsp
+	subq $16, %rsp
+#print
 #Badd
-#Bsub
 	movq $8, %rdi
 	call malloc_wrapper
 	movq $1, 0(%rax)
@@ -39,41 +39,6 @@ main:
 	movq %rax, -16(%rbp)
 	popq %rdi
 	movq 0(%rax), %rsi
-	subq %rsi, %rdi
-#push for result
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	popq %rdi
-	movq %rdi, 0(%rax)
-#Bsub end
-	movq 0(%rax), %rdi
-#push for first value
-	pushq %rdi
-#Bmul
-	movq $8, %rdi
-	call malloc_wrapper
-	movq $7, 0(%rax)
-	movq %rax, -24(%rbp)
-	movq 0(%rax), %rdi
-#push for first value
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	movq $3, 0(%rax)
-	movq %rax, -32(%rbp)
-	popq %rdi
-	movq 0(%rax), %rsi
-	imulq %rsi, %rdi
-#push for result
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	popq %rdi
-	movq %rdi, 0(%rax)
-#Bmul end
-	popq %rdi
-	movq 0(%rax), %rsi
 	addq %rsi, %rdi
 #push for result
 	pushq %rdi
@@ -82,11 +47,10 @@ main:
 	popq %rdi
 	movq %rdi, 0(%rax)
 #Badd end
-#print
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi
 	call printf_wrapper
-	addq $32, %rsp
+	addq $16, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp

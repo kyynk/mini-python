@@ -1,5 +1,2 @@
-x=85
-print(x)
-a=9
-print(a)
+x=1-2+7*3
 print(x)
