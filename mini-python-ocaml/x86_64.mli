@@ -21,27 +21,25 @@ type data = [ `data ] asm
   (** assembler code located in the data section *)
 
 type label = string
-  (** les étiquettes d'addresses sont des chaînes de caractères *)
+  (** address labels are strings *)
 
 val nop : [> ] asm
-  (** l'instruction vide. Peut se trouver dans du text ou du data *)
+  (** the empty instruction. Can be found in text or data *)
 
 val ( ++ ) : ([< `text|`data ] asm as 'a)-> 'a -> 'a
-  (** concatène deux bouts de codes (soit text avec text, soit data avec
-      data) *)
+  (** concatenates two pieces of code (either text with text, or data with data) *)
 
 val inline: string -> [> ] asm
-  (** [inline s] recopie la chaîne [s] telle quelle dans le fichier
-      assembleur *)
+  (** [inline s] copies the string [s] as is into the assembler file *)
 
 type program = {
   text : text;
   data : data;
 }
-  (** un programme est constitué d'une zone de texte et d'une zone de données *)
+  (** a program consists of a text section and a data section *)
 
 val print_program : Format.formatter -> program -> unit
-  (** [print_program fmt p] imprime le code du programme [p] dans le
+  (** [print_program fmt p] prints the code of the program [p] in the
       formatter [fmt] *)
 
 val print_in_file: file:string -> program -> unit
@@ -138,18 +136,18 @@ val imm: int -> [>] operand
   (** immediate operand $i *)
 
 val imm32: int32 -> [>] operand
-  (** opérande immédiate $i *)
+  (** immediate operand $i *)
 
 val imm64: int64 -> [>] operand
-  (** opérande immédiate $i *)
+  (** immediate operand $i *)
 
 val reg: 'size register -> 'size operand
 val (!%): 'size register -> 'size operand
-  (** registre *)
+  (** register *)
 
 val ind: ?ofs:int -> ?index:'size1 register -> ?scale:int ->
   'size2 register -> [>] operand
-  (** opérande indirecte ofs(register, index, scale) *)
+  (** indirect operand ofs(register, index, scale) *)
 
 val lab: label -> [>] operand
   (** label L  *)
@@ -165,7 +163,7 @@ val movb: [`B] operand -> [`B] operand -> text
 val movw: [`W] operand -> [`W] operand -> text
 val movl: [`L] operand -> [`L] operand -> text
 val movq: [`Q] operand -> [`Q] operand -> text
-  (** attention : toutes les combinaisons d'opérandes ne sont pas permises *)
+  (** Note: not all operand combinations are allowed *)
 
 val movsbw: [`B] operand -> [`W] register -> text
 val movsbl: [`B] operand -> [`L] register -> text
@@ -173,17 +171,17 @@ val movsbq: [`B] operand -> [`Q] register -> text
 val movswl: [`W] operand -> [`L] register -> text
 val movswq: [`W] operand -> [`Q] register -> text
 val movslq: [`L] operand -> [`Q] register -> text
-  (** avec extension de signe *)
+  (** with sign extension *)
 
 val movzbw: [`B] operand -> [`W] register -> text
 val movzbl: [`B] operand -> [`L] register -> text
 val movzbq: [`B] operand -> [`Q] register -> text
 val movzwl: [`W] operand -> [`L] register -> text
 val movzwq: [`W] operand -> [`Q] register -> text
-  (** avec extension par zéro *)
+  (** with zero extension *)
 
 val movabsq: [`Q] operand -> [`Q] register -> text
-  (** copie une valeur immédiate 64 bits dans un registre *)
+  (** copies a 64-bit immediate value into a register *)
 
 val cmove : 'size operand -> 'size operand -> text  (* =  0 *)
 val cmovz : 'size operand -> 'size operand -> text  (* =  0 *)
@@ -199,8 +197,8 @@ val cmova : 'size operand -> 'size operand -> text  (* >  non signé *)
 val cmovae: 'size operand -> 'size operand -> text  (* >= non signé *)
 val cmovb : 'size operand -> 'size operand -> text  (* <  non signé *)
 val cmovbe: 'size operand -> 'size operand -> text  (* <= non signé *)
-  (** copie conditionnelle
-      (attention : toutes les combinaisons d'opérandes ne sont pas permises) *)
+  (** conditional move
+    (note: not all operand combinations are allowed) *)
 
 (** {2 Arithmétique } *)
 
@@ -262,8 +260,7 @@ val xorb: [`B] operand -> [`B] operand -> text
 val xorw: [`W] operand -> [`W] operand -> text
 val xorl: [`L] operand -> [`L] operand -> text
 val xorq: [`Q] operand -> [`Q] operand -> text
-  (** Opérations de manipulation de bits. "et" bit à bit, "ou" bit à
-       bit, "not" bit à bit *)
+  (** Bit manipulation operations. Bitwise "and", bitwise "or", bitwise "not" *)
 
 (** {2 Décalages } *)
 
@@ -271,7 +268,7 @@ val shlb: [`B] operand -> [`B] operand -> text
 val shlw: [`W] operand -> [`W] operand -> text
 val shll: [`L] operand -> [`L] operand -> text
 val shlq: [`Q] operand -> [`Q] operand -> text
-  (** note: shl est la même chose que sal *)
+  (** note: shl is the same as sal *)
 
 val shrb: [`B] operand -> [`B] operand -> text
 val shrw: [`W] operand -> [`W] operand -> text
@@ -289,13 +286,13 @@ val call: label -> text
 val call_star: [`Q] operand -> text
 val leave: text
 val ret: text
-  (** appel de fonction et retour *)
+  (** function call and return *)
 
 val jmp : label -> text
-  (** saut inconditionnel *)
+  (** unconditional jump *)
 
 val jmp_star: [`Q] operand -> text
-  (** saut à une adresse calculée *)
+  (** jump to a computed address *)
 
 val je : label -> text  (* =  0 *)
 val jz : label -> text  (* =  0 *)
@@ -311,7 +308,7 @@ val ja : label -> text  (* >  non signé *)
 val jae: label -> text  (* >= non signé *)
 val jb : label -> text  (* <  non signé *)
 val jbe: label -> text  (* <= non signé *)
-  (** sauts conditionnels *)
+  (** conditional jumps *)
 
 (** {2 Conditions } *)
 
@@ -337,16 +334,16 @@ val seta : [`B] operand -> text  (* >  non signé *)
 val setae: [`B] operand -> text  (* >= non signé *)
 val setb : [`B] operand -> text  (* <  non signé *)
 val setbe: [`B] operand -> text  (* <= non signé *)
-  (** positionne l'octet opérande à 1 ou 0 selon que le test est vrai ou non *)
+  (** sets the operand byte to 1 or 0 depending on whether the test is true or not *)
 
 (** {2 Manipulation de la pile} *)
 
 val pushq : [`Q] operand -> text
-  (** [pushq r] place le contenu de [r] au sommet de la pile.
-      Rappel : %rsp pointe sur l'adresse de la dernière case occupée *)
+  (** [pushq r] places the content of [r] at the top of the stack.
+    Reminder: %rsp points to the address of the last occupied slot *)
 
 val popq : [`Q] register -> text
-  (** [popq r] place le mot en sommet de pile dans [r] et dépile *)
+  (** [popq r] places the word at the top of the stack into [r] and pops the stack *)
 
 (** {2 Divers } *)
 
