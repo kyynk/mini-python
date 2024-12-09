@@ -30,7 +30,12 @@ let unique_string_label (env:env_t) (s:string) : X86_64.data =
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * int =
   match c with
   | Cnone ->
-    movq (imm 0) (ind rax), nop, 0
+    env.stack_offset <- env.stack_offset + 8;
+    movq (imm 8) (reg rdi) ++
+    call "malloc_wrapper" ++
+    movq (imm 0) (ind rax) ++
+    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    , nop, 0
   | Cbool b ->
     env.stack_offset <- env.stack_offset + 8;
     movq (imm 8) (reg rdi) ++
