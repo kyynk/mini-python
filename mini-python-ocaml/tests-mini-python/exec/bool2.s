@@ -37,7 +37,9 @@ main:
 	movq %rax, -16(%rbp)
 	popq %rdi
 	movq 0(%rax), %rsi
-	addq %rsi, %rdi
+	cmpq %rsi, %rdi
+	sete %dil
+	movzbq %dil, %rdi
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
