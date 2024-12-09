@@ -24,17 +24,17 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	subq $16, %rsp
-#Bdiv
+#Bmod
 	movq $8, %rdi
 	call malloc_wrapper
-	movq $4, 0(%rax)
+	movq $21, 0(%rax)
 	movq %rax, -8(%rbp)
 	movq 0(%rax), %rdi
 #push for first value
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
-	movq $2, 0(%rax)
+	movq $5, 0(%rax)
 	movq %rax, -16(%rbp)
 	popq %rdi
 	movq 0(%rax), %rsi
@@ -42,14 +42,14 @@ main:
 	cqto
 	movq %rsi, %rbx
 	idivq %rbx
-	movq %rax, %rdi
+	movq %rdx, %rdi
 #push for result
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
 	popq %rdi
 	movq %rdi, 0(%rax)
-#Bdiv end
+#Bmod end
 #print
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi

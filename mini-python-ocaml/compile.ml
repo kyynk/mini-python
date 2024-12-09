@@ -172,7 +172,31 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       movq $2, %rbx         ; Move the value 2 into the %rbx register.
       idivq %rbx            ; Signed division of %rdx:%rax by %rbx. Quotient goes into %rax, remainder into %rdx. *)
     | Bmod ->
-      failwith "Unsupported Bmod"
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      if expr_type1 = 2 && expr_type2 = 2 then
+        comment "Bmod" ++
+        text_code1 ++
+        movq (ind rax) (reg rdi) ++
+        comment "push for first value" ++
+        pushq (reg rdi) ++
+        text_code2 ++
+        popq rdi ++
+        movq (ind rax) (reg rsi) ++
+        movq (reg rdi) (reg rax) ++
+        cqto ++
+        movq (reg rsi) (reg rbx) ++
+        idivq (reg rbx) ++
+        movq (reg rdx) (reg rdi) ++
+        comment "push for result" ++
+        pushq (reg rdi) ++
+        movq (imm 8) (reg rdi) ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (reg rdi) (ind rax) ++
+        comment "Bmod end", data_code1 ++ data_code2, 2
+      else
+        failwith "Unsupported Bmod"
     | Beq ->
       failwith "Unsupported Beq"
     | Bneq ->
