@@ -198,7 +198,29 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       else
         failwith "Unsupported Bmod"
     | Beq ->
-      failwith "Unsupported Beq"
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      if expr_type1 = 2 && expr_type2 = 2 then
+        comment "Beq" ++
+        text_code1 ++
+        movq (ind rax) (reg rdi) ++
+        comment "push for first value" ++
+        pushq (reg rdi) ++
+        text_code2 ++
+        popq rdi ++
+        movq (ind rax) (reg rsi) ++
+        cmpq (reg rsi) (reg rdi) ++
+        sete (reg dil) ++
+        movzbq (reg dil) rdi ++
+        comment "push for result" ++
+        pushq (reg rdi) ++
+        movq (imm 8) (reg rdi) ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (reg rdi) (ind rax) ++
+        comment "Beq end", data_code1 ++ data_code2, 2
+      else
+        failwith "Unsupported Beq"
     | Bneq ->
       failwith "Unsupported Bneq"
     | Blt ->
