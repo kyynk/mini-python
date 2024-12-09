@@ -26,18 +26,22 @@ let unique_string_label (env:env_t) (s:string) : X86_64.data =
   env.string_counter <- n + 1;
   label (Printf.sprintf "str%d" n)
 
+(* const is always stored at the address rax is pointing to *)
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * int =
   match c with
   | Cnone ->
-    (* tbd *)
-    movq (imm 0) (ind ~ofs:(0) rax), nop, 0
+    movq (imm 0) (ind rax), nop, 0
   | Cbool b ->
-    (* tbd *)
-    movq (imm64 (if b then 1L else 0L)) (ind ~ofs:(0) rax), nop, 1
+    env.stack_offset <- env.stack_offset + 8;
+    movq (imm 8) (reg rdi) ++
+    call "malloc_wrapper" ++
+    movq (imm (if b then 1 else 0)) (ind rax) ++
+    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    , nop, 1
   | Cint i ->
     env.stack_offset <- env.stack_offset + 8;
     movq (imm 8) (reg rdi) ++
-    call "my_malloc" ++
+    call "malloc_wrapper" ++
     movq (imm64 i) (ind ~ofs:(0) rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
     , nop, 2
@@ -54,29 +58,110 @@ let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * int =
   if StringMap.mem v.v_name env.vars then
     begin
       let var, ofs, var_type = StringMap.find v.v_name env.vars in
-      (* if var_type = 1 then
-        comment "bool" ++
-        movq (ind ~ofs:(ofs) rbp) (reg rax), nop *)
+      (* for now, only return the type *)
       if var_type = 2 then
-        comment "int" ++
-        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
+        nop, nop, var_type
       else
         failwith "Unsupported var type"
     end
   else
     failwith "Variable not found"
-    (* let ofs = -env.stack_offset in
-    env.vars <- StringMap.add v.v_name (v, ofs, 2) env.vars;
-    movq (ind ~ofs:(ofs) rbp) (reg rax), nop, 2 *)
 
-let compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * int =
+let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * int =
   match expr with
   | TEcst c ->
     compile_const env c
   | TEvar v ->
     compile_var env v
   | TEbinop (op, e1, e2) ->
-    failwith "Unsupported TEbinop"
+    begin match op with
+    | Badd ->
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      if expr_type1 = 2 && expr_type2 = 2 then
+        comment "Badd" ++
+        text_code1 ++
+        movq (ind rax) (reg rdi) ++
+        comment "push for first value" ++
+        pushq (reg rdi) ++
+        text_code2 ++
+        popq rdi ++
+        movq (ind rax) (reg rsi) ++
+        addq (reg rsi) (reg rdi) ++
+        comment "push for result" ++
+        pushq (reg rdi) ++
+        movq (imm 8) (reg rdi) ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (reg rdi) (ind rax) ++
+        comment "Badd end", data_code1 ++ data_code2, 2
+      else
+        failwith "Unsupported Badd"
+    | Bsub ->
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      if expr_type1 = 2 && expr_type2 = 2 then
+        comment "Bsub" ++
+        text_code1 ++
+        movq (ind rax) (reg rdi) ++
+        comment "push for first value" ++
+        pushq (reg rdi) ++
+        text_code2 ++
+        popq rdi ++
+        movq (ind rax) (reg rsi) ++
+        subq (reg rsi) (reg rdi) ++
+        comment "push for result" ++
+        pushq (reg rdi) ++
+        movq (imm 8) (reg rdi) ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (reg rdi) (ind rax) ++
+        comment "Bsub end", data_code1 ++ data_code2, 2
+      else
+        failwith "Unsupported Bsub"
+    | Bmul ->
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      if expr_type1 = 2 && expr_type2 = 2 then
+        comment "Bmul" ++
+        text_code1 ++
+        movq (ind rax) (reg rdi) ++
+        comment "push for first value" ++
+        pushq (reg rdi) ++
+        text_code2 ++
+        popq rdi ++
+        movq (ind rax) (reg rsi) ++
+        imulq (reg rsi) (reg rdi) ++
+        comment "push for result" ++
+        pushq (reg rdi) ++
+        movq (imm 8) (reg rdi) ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (reg rdi) (ind rax) ++
+        comment "Bmul end", data_code1 ++ data_code2, 2
+      else
+        failwith "Unsupported Bmul"
+    | Bdiv ->
+      failwith "Unsupported Bdiv"
+    | Bmod ->
+      failwith "Unsupported Bmod"
+    | Beq ->
+      failwith "Unsupported Beq"
+    | Bneq ->
+      failwith "Unsupported Bneq"
+    | Blt ->
+      failwith "Unsupported Blt"
+    | Ble ->
+      failwith "Unsupported Ble"
+    | Bgt ->
+      failwith "Unsupported Bgt"
+    | Bge ->
+      failwith "Unsupported Bge"
+    | Band ->
+      failwith "Unsupported Band"
+    | Bor ->
+      failwith "Unsupported Bor"
+    end
   | TEunop (op, e) ->
     failwith "Unsupported TEunop"
   | TEcall (fn, args) ->
@@ -98,14 +183,18 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     let text_code, data_code, expr_type = compile_expr env expr in
     let ofs = -env.stack_offset in
     env.vars <- StringMap.add var.v_name (var, ofs, expr_type) env.vars;
-    text_code, data_code
+    text_code
+    (* movq (ind ~ofs:(ofs) rbp) (reg rax) *)
+    , data_code
   | TSprint expr ->
     let text_code, data_code, expr_type = compile_expr env expr in
     (* format string required *)
+    comment "print" ++
     text_code ++
     movq (ind rax) (reg rsi) ++
     leaq (lab "print_int") rdi ++
-    call "printf", data_code
+    call "printf_wrapper",
+    data_code
   | TSblock stmts ->
     List.fold_left (fun (acc_text, acc_data) stmt ->
       let text_code, data_code = compile_stmt env stmt in
@@ -129,20 +218,32 @@ let compile_def env ((fn, body): Ast.tdef) : X86_64.text * X86_64.data =
     pushq (reg rbp) ++
     movq (reg rsp) (reg rbp) in
   let epilogue = 
-    testq (reg rax) (reg rax) ++
+    xorq (reg rax) (reg rax) ++
     movq (reg rbp) (reg rsp) ++
     popq rbp ++
     ret in
   let body_code, data_code = compile_stmt env_local body in
   label fn.fn_name ++ prologue ++ body_code ++ epilogue, data_code
 
-let custom_malloc : X86_64.text =
-  label "my_malloc" ++
+let malloc_wrapper : X86_64.text =
+  label "malloc_wrapper" ++
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
   andq (imm (-16)) (reg rsp) ++
   comment "allign rsp to 16 bytes" ++
   call "malloc" ++
+  testq (reg rax) (reg rax) ++
+  movq (reg rbp) (reg rsp) ++
+  popq rbp ++
+  ret
+
+let printf_wrapper: X86_64.text =
+  label "printf_wrapper" ++
+  pushq (reg rbp) ++
+  movq (reg rsp) (reg rbp) ++
+  andq (imm (-16)) (reg rsp) ++
+  comment "allign rsp to 16 bytes" ++
+  call "printf" ++
   testq (reg rax) (reg rax) ++
   movq (reg rbp) (reg rsp) ++
   popq rbp ++
@@ -158,11 +259,12 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   ) (nop, nop) p in
   { 
     text = 
-      custom_malloc ++
+      malloc_wrapper ++
+      printf_wrapper ++
       globl "main" ++ text_code;
     data = 
       data_code ++
       label "print_int" ++
-      string " %d\n"
+      string "%d\n"
       (* hard-coded print_int *)
   }
