@@ -50,14 +50,9 @@ let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * i
     movq (imm64 i) (ind ~ofs:(0) rax) ++
     movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
     , nop, 2
-  (* | Cstring s ->
-    let text_code =
-      leaq (lab (Printf.sprintf "str%d" (env.string_counter - 1))) rax in
-    let data_code = 
-      unique_string_label env s ++
-      string s in
-    text_code, data_code *)
-  | _ -> failwith "Unsupported constant"
+  | Cstring s ->
+    leaq (lab (Printf.sprintf "str%d" (env.string_counter - 1))) rax,
+    unique_string_label env s ++ string s, 3
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * int =
   if StringMap.mem v.v_name env.vars then
@@ -233,16 +228,14 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
 let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
   | TSif (cond, s1, s2) ->
-    failwith "Unsupported Sif"
+    failwith "Unsupported TSif"
   | TSreturn expr ->
     failwith "Unsupported Sreturn"
   | TSassign (var, expr) -> (* x = 1 *)
     let text_code, data_code, expr_type = compile_expr env expr in
     let ofs = -env.stack_offset in
     env.vars <- StringMap.add var.v_name (var, ofs, expr_type) env.vars;
-    text_code
-    (* movq (ind ~ofs:(ofs) rbp) (reg rax) *)
-    , data_code
+    text_code, data_code
   | TSprint expr ->
     let text_code, data_code, expr_type = compile_expr env expr in
     (* format string required *)
