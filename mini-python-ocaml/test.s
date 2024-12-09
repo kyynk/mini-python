@@ -23,68 +23,20 @@ printf_wrapper:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $32, %rsp
-#Beq
-	movq $8, %rdi
-	call malloc_wrapper
-	movq $5, 0(%rax)
-	movq %rax, -8(%rbp)
-	movq 0(%rax), %rdi
-#push for first value
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	movq $5, 0(%rax)
-	movq %rax, -16(%rbp)
-	popq %rdi
-	movq 0(%rax), %rsi
-	cmpq %rsi, %rdi
-	sete %dil
-	movzbq %dil, %rdi
-#push for result
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	popq %rdi
-	movq %rdi, 0(%rax)
-#Beq end
+	subq $0, %rsp
+	leaq str0, %rax
 #print
+#print_type expr_type
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi
 	call printf_wrapper
-#Beq
-	movq $8, %rdi
-	call malloc_wrapper
-	movq $5, 0(%rax)
-	movq %rax, -24(%rbp)
-	movq 0(%rax), %rdi
-#push for first value
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	movq $6, 0(%rax)
-	movq %rax, -32(%rbp)
-	popq %rdi
-	movq 0(%rax), %rsi
-	cmpq %rsi, %rdi
-	sete %dil
-	movzbq %dil, %rdi
-#push for result
-	pushq %rdi
-	movq $8, %rdi
-	call malloc_wrapper
-	popq %rdi
-	movq %rdi, 0(%rax)
-#Beq end
-#print
-	movq 0(%rax), %rsi
-	leaq print_int, %rdi
-	call printf_wrapper
-	addq $32, %rsp
+	addq $0, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
 	ret
 	.data
+str0:
+	.string "123"
 print_int:
 	.string "%d\n"

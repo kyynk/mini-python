@@ -58,11 +58,15 @@ let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * int =
   if StringMap.mem v.v_name env.vars then
     begin
       let var, ofs, var_type = StringMap.find v.v_name env.vars in
-      (* for now, only return the type *)
-      if var_type = 2 then
-        nop, nop, var_type
-      else
-        failwith "Unsupported var type"
+      begin
+        match var_type with
+        | 2 ->
+          nop, nop, var_type
+        | 3 ->
+          nop, nop, var_type
+        | _ ->
+          failwith "Unsupported var type"
+      end
     end
   else
     failwith "Variable not found"
