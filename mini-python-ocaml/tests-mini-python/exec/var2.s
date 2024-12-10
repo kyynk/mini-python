@@ -26,7 +26,7 @@ main:
 	subq $8, %rsp
 	movq $8, %rdi
 	call malloc_wrapper
-	movq $1, 0(%rax)
+	movq %rbx, 0(%rax)
 	movq %rax, -8(%rbp)
 #print
 	movq 0(%rax), %rsi
@@ -38,7 +38,7 @@ main:
 	popq %rbp
 	ret
 	.data
+str0:
+	.string "foo"
 print_int:
 	.string "%d\n"
-print_str:
-	.string "%s\n"
