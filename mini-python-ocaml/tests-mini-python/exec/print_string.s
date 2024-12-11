@@ -23,16 +23,13 @@ printf_wrapper:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $8, %rsp
+	subq $0, %rsp
 #print
-	movq $8, %rdi
-	call malloc_wrapper
-	movq %rbx, 0(%rax)
-	movq %rax, -8(%rbp)
+	leaq str0, %rax
 	movq 0(%rax), %rsi
 	leaq print_int, %rdi
 	call printf_wrapper
-	addq $8, %rsp
+	addq $0, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
