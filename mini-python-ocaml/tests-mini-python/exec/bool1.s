@@ -23,41 +23,35 @@ printf_wrapper:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $24, %rsp
+	addq $0, %rsp
+#print_int
 	movq $8, %rdi
 	call malloc_wrapper
-	movabsq $str0, %rax
-	movq %rax, -8(%rbp)
+	movq $1, 0(%rax)
+	movq 0(%rax), %rdi
+	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
-	movabsq $str1, %rax
-	movq %rax, -16(%rbp)
+	movq $2, 0(%rax)
+	popq %rdi
+	movq 0(%rax), %rsi
+	cmpq %rsi, %rdi
+	setl %dil
+	movzbq %dil, %rdi
+	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
-	movabsq $str2, %rax
-	movq %rax, -24(%rbp)
-#print_str
-	movq -24(%rbp), %rax
-	movq %rax, %rsi
-	leaq print_str, %rdi
+	popq %rdi
+	movq %rdi, 0(%rax)
+	movq 0(%rax), %rsi
+	leaq print_int, %rdi
 	call printf_wrapper
-#print_str
-	movq -8(%rbp), %rax
-	movq %rax, %rsi
-	leaq print_str, %rdi
-	call printf_wrapper
-	addq $24, %rsp
+	subq $0, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
 	ret
 	.data
-str0:
-	.string "hello"
-str1:
-	.string "he"
-str2:
-	.string "llo"
 print_int:
 	.string "%d\n"
 print_str:

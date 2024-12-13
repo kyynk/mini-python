@@ -29,53 +29,35 @@ let unique_string_label (env:env_t) (s:label) : X86_64.data * label =
   label (Printf.sprintf "str%d" n) ++ string s
   , "str" ^ (string_of_int n)
 
-(* const is always stored at the address rax is pointing to *)
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * ty =
   match c with
   | Cnone ->
-    env.stack_offset <- env.stack_offset + byte;
     movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm 0) (ind rax) ++
-    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    movq (imm 0) (ind rax)
     , nop, `none
   | Cbool b ->
-    env.stack_offset <- env.stack_offset + byte;
     movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm (if b then 1 else 0)) (ind rax) ++
-    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    movq (imm (if b then 1 else 0)) (ind rax)
     , nop, `bool
   | Cint i ->
-    env.stack_offset <- env.stack_offset + byte;
     movq (imm byte) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm64 i) (ind ~ofs:(0) rax) ++
-    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    movq (imm64 i) (ind ~ofs:(0) rax)
     , nop, `int
   | Cstring s ->
     let data_code, label = unique_string_label env s in
-    env.stack_offset <- env.stack_offset + 8;
     movq (imm 8) (reg rdi) ++
     call "malloc_wrapper" ++
-    movabsq (ilab label) rax ++
-    movq (reg rax) (ind ~ofs:(-env.stack_offset) rbp)
+    movabsq (ilab label) rax
     ,data_code , `string
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
   if StringMap.mem v.v_name env.vars then
     begin
       let var, ofs, var_type = StringMap.find v.v_name env.vars in
-      begin match var_type with
-      | `int ->
-        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, `int
-      | `bool ->
-        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, `bool
-      | `string ->
-        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, `string
-      | _ ->
-        nop, nop, `none
-      end
+        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
     end
   else
     failwith "Variable not found"
@@ -94,7 +76,7 @@ let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instruction:X86_64.text) 
   popq rdi ++
   movq (reg rdi) (ind rax)
 
-  
+(* return value *)
 let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * ty =
   match expr with
   | TEcst c ->
@@ -215,10 +197,12 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
   | TSreturn expr ->
     failwith "Unsupported Sreturn"
   | TSassign (var, expr) -> (* x = 1 *)
+    env.stack_offset <- env.stack_offset - 8;
     let text_code, data_code, expr_type = compile_expr env expr in
-    let ofs = -env.stack_offset in
-    env.vars <- StringMap.add var.v_name (var, ofs, expr_type) env.vars;
-    text_code, data_code
+    env.vars <- StringMap.add var.v_name (var, env.stack_offset, expr_type) env.vars;
+    text_code ++
+    movq (reg rax) (ind ~ofs:(env.stack_offset) rbp)
+    , data_code
   | TSprint expr ->
     let text_code, data_code, expr_type = compile_expr env expr in
     begin match expr_type with
@@ -252,9 +236,9 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       acc_text ++ text_code, acc_data ++ data_code
     ) (nop, nop) stmts
     |> fun (text_code, data_code) -> 
-      subq (imm (env.stack_offset)) (reg rsp) ++
+      addq (imm (env.stack_offset)) (reg rsp) ++
       text_code ++
-      addq (imm (env.stack_offset)) (reg rsp)
+      subq (imm (env.stack_offset)) (reg rsp)
       , data_code
   | TSfor (var, expr, body) ->
     failwith "Unsupported Sfor"
