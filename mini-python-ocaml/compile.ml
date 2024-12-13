@@ -66,14 +66,13 @@ let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
   if StringMap.mem v.v_name env.vars then
     begin
       let var, ofs, var_type = StringMap.find v.v_name env.vars in
-      (* for now, only return the type *)
       begin match var_type with
       | `int ->
-        nop, nop, `int
+        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, `int
       | `bool ->
-        nop, nop, `bool
+        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, `bool
       | `string ->
-        nop, nop, `string
+        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, `string
       | _ ->
         nop, nop, `none
       end
@@ -191,10 +190,15 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         failwith "dont care"
       end
     end
-  | _ ->
-    failwith "dont care"
-  (* | TEunop (op, e) ->
-    failwith "Unsupported TEunop"
+  (* | _ ->
+    failwith "dont care" *)
+  | TEunop (op, e) ->
+    begin match op with
+      | Uneg ->
+        failwith "Unsupported Uneg"
+      | Unot ->
+        failwith "Unsupported Unot"
+    end
   | TEcall (fn, args) ->
     failwith "Unsupported TEcall"
   | TElist l ->
@@ -202,7 +206,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
   | TErange e ->
     failwith "Unsupported TErange"
   | TEget (e1, e2) ->
-    failwith "Unsupported TEget" *)
+    failwith "Unsupported TEget"
 
 let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
