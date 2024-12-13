@@ -54,13 +54,8 @@ let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * t
     ,data_code , `string
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
-  if StringMap.mem v.v_name env.vars then
-    begin
-      let var, ofs, var_type = StringMap.find v.v_name env.vars in
-        movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
-    end
-  else
-    failwith "Variable not found"
+    let var, ofs, var_type = StringMap.find v.v_name env.vars in
+      movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
 
 let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instruction:X86_64.text) : X86_64.text =
   code1 ++
@@ -86,7 +81,8 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
   | TEbinop (op, e1, e2) ->
     begin match op with
     | Band | Bor ->
-      failwith "Unsupported Band/Bor"
+      (* lazy evaluation *)
+      failwith "tbd"
     | Badd | Bsub | Bmul | Bdiv | Bmod | Beq | Bneq | Blt | Ble | Bgt | Bge ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
@@ -169,17 +165,37 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         ),
         data_code1 ++ data_code2, `bool
       | _ ->
-        failwith "dont care"
+        failwith "Unsupported binop"
       end
     end
-  (* | _ ->
-    failwith "dont care" *)
   | TEunop (op, e) ->
     begin match op with
       | Uneg ->
-        failwith "Unsupported Uneg"
+        let text_code, data_code, expr_type = compile_expr env e in
+        begin match expr_type with
+        | `int ->
+          text_code ++
+          movq (ind rax) (reg rdi) ++
+          negq (reg rdi) ++
+          movq (imm byte) (reg rsi) ++
+          call "malloc_wrapper",
+          data_code, `int
+        | _ ->
+          failwith "Unsupported Uneg"
+        end
       | Unot ->
-        failwith "Unsupported Unot"
+        let text_code, data_code, expr_type = compile_expr env e in
+        begin match expr_type with
+        | `bool ->
+          text_code ++
+          movq (ind rax) (reg rdi) ++
+          xorq (imm 1) (reg rdi) ++
+          movq (imm byte) (reg rsi) ++
+          call "malloc_wrapper",
+          data_code, `bool
+        | _ ->
+          failwith "Unsupported Unot"
+        end
     end
   | TEcall (fn, args) ->
     failwith "Unsupported TEcall"
@@ -267,7 +283,6 @@ let malloc_wrapper : X86_64.text =
   andq (imm (-16)) (reg rsp) ++
   comment "allign rsp to 16 bytes" ++
   call "malloc" ++
-  testq (reg rax) (reg rax) ++
   movq (reg rbp) (reg rsp) ++
   popq rbp ++
   ret
@@ -279,7 +294,6 @@ let printf_wrapper: X86_64.text =
   andq (imm (-16)) (reg rsp) ++
   comment "allign rsp to 16 bytes" ++
   call "printf" ++
-  testq (reg rax) (reg rax) ++
   movq (reg rbp) (reg rsp) ++
   popq rbp ++
   ret
