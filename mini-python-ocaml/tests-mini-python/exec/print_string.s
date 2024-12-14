@@ -23,13 +23,15 @@ printf_wrapper:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $0, %rsp
-#print
-	leaq str0, %rax
-	movq 0(%rax), %rsi
-	leaq print_int, %rdi
-	call printf_wrapper
 	addq $0, %rsp
+#print_str
+	movq $8, %rdi
+	call malloc_wrapper
+	movabsq $str0, %rax
+	movq %rax, %rsi
+	leaq print_str, %rdi
+	call printf_wrapper
+	subq $0, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
@@ -39,3 +41,5 @@ str0:
 	.string "foo"
 print_int:
 	.string "%d\n"
+print_str:
+	.string "%s\n"

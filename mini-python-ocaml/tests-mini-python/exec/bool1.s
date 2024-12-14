@@ -27,15 +27,17 @@ main:
 #print_int
 	movq $8, %rdi
 	call malloc_wrapper
-	movq $2, 0(%rax)
+	movq $1, 0(%rax)
 	movq 0(%rax), %rdi
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper
-	movq $3, 0(%rax)
+	movq $2, 0(%rax)
 	popq %rdi
 	movq 0(%rax), %rsi
-	imulq %rsi, %rdi
+	cmpq %rsi, %rdi
+	setl %dil
+	movzbq %dil, %rdi
 	pushq %rdi
 	movq $8, %rdi
 	call malloc_wrapper

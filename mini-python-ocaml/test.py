@@ -2,5 +2,8 @@ x= 5 == 5
 print(x)
 a = 5 == 6
 print(a)
-b = "hello"
+c = "hello"
+b = "he"
+b = "llo"
 print(b)
+print(c)
