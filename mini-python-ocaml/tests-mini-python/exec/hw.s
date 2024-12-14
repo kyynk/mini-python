@@ -1,9 +1,20 @@
 	.text
-my_malloc:
+malloc_wrapper:
 	pushq %rbp
 	movq %rsp, %rbp
 	andq $-16, %rsp
+#allign rsp to 16 bytes
 	call malloc
+	testq %rax, %rax
+	movq %rbp, %rsp
+	popq %rbp
+	ret
+printf_wrapper:
+	pushq %rbp
+	movq %rsp, %rbp
+	andq $-16, %rsp
+#allign rsp to 16 bytes
+	call printf
 	testq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
@@ -12,13 +23,16 @@ my_malloc:
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	leaq str0, %rax
-	movq -8(%rbp), %rax
-	movq 0(%rax), %rsi
-	leaq print_int, %rdi
-	call printf
-	addq $8, %rbp
-	testq %rax, %rax
+	addq $0, %rsp
+#print_str
+	movq $8, %rdi
+	call malloc_wrapper
+	movabsq $str0, %rax
+	movq %rax, %rsi
+	leaq print_str, %rdi
+	call printf_wrapper
+	subq $0, %rsp
+	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
 	ret
@@ -26,4 +40,6 @@ main:
 str0:
 	.string "hello, world"
 print_int:
-	.string " %d\n"
+	.string "%d\n"
+print_str:
+	.string "%s\n"

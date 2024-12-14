@@ -24,12 +24,29 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $0, %rsp
-#print_str
+#print_int
 	movq $8, %rdi
 	call malloc_wrapper
-	movabsq $str0, %rax
-	movq %rax, %rsi
-	leaq print_str, %rdi
+	movq $17, 0(%rax)
+	movq 0(%rax), %rdi
+	pushq %rdi
+	movq $8, %rdi
+	call malloc_wrapper
+	movq $2, 0(%rax)
+	popq %rdi
+	movq 0(%rax), %rsi
+	movq %rdi, %rax
+	cqto
+	movq %rsi, %rbx
+	idivq %rbx
+	movq %rax, %rdi
+	pushq %rdi
+	movq $8, %rdi
+	call malloc_wrapper
+	popq %rdi
+	movq %rdi, 0(%rax)
+	movq 0(%rax), %rsi
+	leaq print_int, %rdi
 	call printf_wrapper
 	subq $0, %rsp
 	xorq %rax, %rax
@@ -37,8 +54,6 @@ main:
 	popq %rbp
 	ret
 	.data
-str0:
-	.string "foo"
 print_int:
 	.string "%d\n"
 print_str:
