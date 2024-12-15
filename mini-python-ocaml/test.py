@@ -1,9 +1,5 @@
-x= 5 == 5
-print(x)
-a = 5 == 6
-print(a)
-c = "hello"
-b = "he"
-b = "llo"
-print(b)
-print(c)
+x = True
+if x:
+    print(1)
+else:
+    print(2)
