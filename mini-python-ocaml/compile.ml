@@ -23,6 +23,7 @@ let empty_env = {
   string_counter = 0;
 }
 let byte = 8
+
 let unique_string_label (env:env_t) (s:label) : X86_64.data * label =
   let n = env.string_counter in
   env.string_counter <- n + 1;
@@ -32,26 +33,36 @@ let unique_string_label (env:env_t) (s:label) : X86_64.data * label =
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * ty =
   match c with
   | Cnone ->
-    movq (imm byte) (reg rdi) ++
+    movq (imm (2 * byte)) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm 0) (ind rax)
+    movq (imm 0) (ind rax) ++
+    movq (imm 0) (ind ~ofs:(byte) rax)
     , nop, `none
   | Cbool b ->
-    movq (imm byte) (reg rdi) ++
+    movq (imm (2 * byte)) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm (if b then 1 else 0)) (ind rax)
+    movq (imm 1) (ind rax) ++
+    movq (imm (if b then 1 else 0)) (ind ~ofs:(byte) rax)
     , nop, `bool
   | Cint i ->
-    movq (imm byte) (reg rdi) ++
+    movq (imm (2 * byte)) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm64 i) (ind ~ofs:(0) rax)
+    movq (imm 2) (ind rax) ++
+    movq (imm64 i) (ind ~ofs:(byte) rax)
     , nop, `int
   | Cstring s ->
-    let data_code, label = unique_string_label env s in
-    movq (imm 8) (reg rdi) ++
+    (* let data_code, label = unique_string_label env s in *)
+    let len = String.length s in
+    let (text_code, _) = String.fold_left (fun (acc, counter) i ->
+      let counter = counter + 8 in
+      acc ++ movq (imm (Char.code i)) (ind ~ofs:(counter) rax), counter
+    ) (nop, 2 * byte) s in
+    movq (imm ((len + 3) * byte)) (reg rdi) ++
     call "malloc_wrapper" ++
-    movabsq (ilab label) rax
-    ,data_code , `string
+    movq (imm 3) (ind rax) ++
+    movq (imm len) (ind ~ofs:(byte) rax) ++
+    text_code
+    ,nop , `string
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
     let var, ofs, var_type = StringMap.find v.v_name env.vars in
@@ -70,6 +81,13 @@ let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instruction:X86_64.text) 
   call "malloc_wrapper" ++
   popq rdi ++
   movq (reg rdi) (ind rax)
+
+let construct_texpr_list (len:int) : texpr list =
+  let rec aux acc i =
+    if i = len then acc
+    else aux (TEcst (Cint 0L) :: acc) (i + 1)
+  in
+  aux [] 0
 
 (* return value *)
 let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * ty =
@@ -200,7 +218,22 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
   | TEcall (fn, args) ->
     failwith "Unsupported TEcall"
   | TElist l ->
-    failwith "Unsupported TElist"
+    let len = List.length l in
+    List.fold_left (fun (acc, counter) i ->
+      let text_code, _, _ = compile_expr env i in
+      acc ++
+      pushq (reg rax) ++
+      text_code ++
+      movq (reg rax) (reg rsi) ++
+      popq rax ++
+      movq (reg rsi) (ind ~ofs:(2 * byte + 8 * counter) rax),
+      counter + 1
+    ) (nop, 0) l |> fun (text_code, _) ->
+    movq (imm ((len + 3) * byte)) (reg rdi) ++
+    call "malloc_wrapper" ++
+    movq (imm 4) (ind rax) ++
+    movq (imm len) (ind ~ofs:(byte) rax) ++
+    text_code, nop, `list
   | TErange e ->
     failwith "Unsupported TErange"
   | TEget (e1, e2) ->
@@ -209,10 +242,22 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
 let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
   | TSif (cond, s1, s2) ->
-    failwith "Unsupported TSif"
+    let text_code_cond, data_code_cond, _ = compile_expr env cond in
+    let text_code_s1, data_code_s1 = compile_stmt env s1 in
+    let text_code_s2, data_code_s2 = compile_stmt env s2 in
+    text_code_cond ++
+    cmpq (imm 0) (ind rax) ++
+    je "else" ++
+    text_code_s2 ++
+    jmp "end" ++
+    label "else" ++
+    text_code_s1 ++
+    label "end"
+    , data_code_cond ++ data_code_s1 ++ data_code_s2
   | TSreturn expr ->
     failwith "Unsupported Sreturn"
-  | TSassign (var, expr) -> (* x = 1 *)
+  | TSassign (var, expr) ->
+    (* tbm *)
     env.stack_offset <- env.stack_offset - 8;
     let text_code, data_code, expr_type = compile_expr env expr in
     env.vars <- StringMap.add var.v_name (var, env.stack_offset, expr_type) env.vars;
@@ -276,24 +321,13 @@ let compile_def env ((fn, body): Ast.tdef) : X86_64.text * X86_64.data =
   let body_code, data_code = compile_stmt env_local body in
   label fn.fn_name ++ prologue ++ body_code ++ epilogue, data_code
 
-let malloc_wrapper : X86_64.text =
-  label "malloc_wrapper" ++
+let c_standard_function_wrapper (l:string) (fn_name:string): X86_64.text =
+  label l ++
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
   andq (imm (-16)) (reg rsp) ++
-  comment "allign rsp to 16 bytes" ++
-  call "malloc" ++
-  movq (reg rbp) (reg rsp) ++
-  popq rbp ++
-  ret
-
-let printf_wrapper: X86_64.text =
-  label "printf_wrapper" ++
-  pushq (reg rbp) ++
-  movq (reg rsp) (reg rbp) ++
-  andq (imm (-16)) (reg rsp) ++
-  comment "allign rsp to 16 bytes" ++
-  call "printf" ++
+  xorq (reg rax) (reg rax) ++
+  call fn_name ++
   movq (reg rbp) (reg rsp) ++
   popq rbp ++
   ret
@@ -308,8 +342,12 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   ) (nop, nop) p in
   { 
     text = 
-      malloc_wrapper ++
-      printf_wrapper ++
+      c_standard_function_wrapper "malloc_wrapper" "malloc" ++
+      c_standard_function_wrapper "putchar_wrapper" "putchar" ++
+      c_standard_function_wrapper "printf_wrapper" "printf" ++
+      c_standard_function_wrapper "strcmp_wrapper" "strcmp" ++
+      c_standard_function_wrapper "strcpy_wrapper" "strcpy" ++
+      c_standard_function_wrapper "strcat_wrapper" "strcat" ++
       globl "main" ++ text_code;
     data = 
       data_code ++
