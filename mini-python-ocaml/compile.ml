@@ -13,23 +13,27 @@ type env_t = {
   mutable vars: (var * int * ty) StringMap.t;
   funcs: fn StringMap.t;
   mutable stack_offset: int;
-  mutable string_counter: int;
+  mutable counters: int StringMap.t;
 }
 
 let empty_env = {
   vars = StringMap.empty;
   funcs = StringMap.empty;
   stack_offset = 0;
-  string_counter = 0;
+  counters = StringMap.empty;
 }
 
 let byte = 8
 
-let unique_string_label (env:env_t) (s:label) : X86_64.data * label =
-  let n = env.string_counter in
-  env.string_counter <- n + 1;
-  label (Printf.sprintf "str%d" n) ++ string s
-  , "str" ^ (string_of_int n)
+let unique_label (env: env_t) (prefix: string) : string =
+  let counter =
+    match StringMap.find_opt prefix env.counters with
+    | Some c -> c
+    | None -> 0
+  in
+  env.counters <- StringMap.add prefix (counter + 1) env.counters;
+  Printf.sprintf "%s%d" prefix counter
+
 
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * ty =
   match c with
@@ -125,9 +129,34 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
     compile_var env v
   | TEbinop (op, e1, e2) ->
     begin match op with
-    | Band | Bor ->
-      (* lazy evaluation *)
-      failwith "tbd"
+    | Band ->
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      begin
+      if expr_type1 <> `bool || expr_type2 <> `bool then failwith "compilation error";
+        let l = unique_label env "cond_false" in
+        text_code1 ++
+        movq (ind ~ofs:(byte) rax) !%rdi ++
+        cmpq (imm 0) !%rdi ++
+        je l ++
+        text_code2 ++
+        label l        
+        , data_code1 ++ data_code2, `bool  
+      end
+    | Bor ->
+      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
+      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
+      begin
+      if expr_type1 <> `bool || expr_type2 <> `bool then failwith "compilation error";
+        let l = unique_label env "cond_true" in
+        text_code1 ++
+        movq (ind ~ofs:(byte) rax) !%rdi ++
+        cmpq (imm 0) !%rdi ++
+        jne l ++
+        text_code2 ++
+        label l
+        , data_code1 ++ data_code2, `bool
+      end
     | Badd | Bsub | Bmul | Bdiv | Bmod | Beq | Bneq | Blt | Ble | Bgt | Bge ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
@@ -322,18 +351,19 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       call "putchar_wrapper"
       , data_code
     | `bool ->
+      let b_false = unique_label env "b_false" in
+      let b_end = unique_label env "b_end" in
       text_code ++
       movq (ind ~ofs:(byte) rax) !%rsi ++
       testq !%rsi !%rsi ++
-      jz "print_false" ++
-      label "print_true" ++
+      jz b_false ++
       leaq (lab "true_string") rdi ++
       call "printf_wrapper" ++
-      jmp "print_end" ++
-      label "print_false" ++
+      jmp b_end ++
+      label b_false ++
       leaq (lab "false_string") rdi ++
       call "printf_wrapper" ++
-      label "print_end",
+      label b_end,
       data_code
     | _ ->
       failwith "Unsupported print"
