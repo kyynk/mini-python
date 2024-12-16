@@ -304,14 +304,16 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     let text_code_cond, data_code_cond, _ = compile_expr env cond in
     let text_code_s1, data_code_s1 = compile_stmt env s1 in
     let text_code_s2, data_code_s2 = compile_stmt env s2 in
+    let else_label = unique_label env "else" in
+    let end_label = unique_label env "end" in
     text_code_cond ++
     cmpq (imm 0) (ind rax) ++
-    je "else" ++
+    je else_label ++
     text_code_s1 ++
-    jmp "end" ++
-    label "else" ++
+    jmp end_label ++
+    label else_label ++
     text_code_s2 ++
-    label "end"
+    label end_label
     , data_code_cond ++ data_code_s1 ++ data_code_s2
   | TSreturn expr ->
     failwith "Unsupported Sreturn"
@@ -334,19 +336,21 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       call "printf_wrapper",
       data_code
     | `string ->
+      let loop_start = unique_label env "loop_start" in
+      let loop_end = unique_label env "loop_end" in
       text_code ++
       movq (reg rax) (reg rsi) ++
-      label "loop_start" ++
+      label loop_start ++
       movq (ind rsi) (reg rax) ++
       testq (reg rax) (reg rax) ++
-      jz "loop_end" ++
+      jz loop_end ++
       movq (reg rax) (reg rdi) ++
       pushq (reg rsi) ++
       call "putchar_wrapper" ++
       popq rsi ++
       addq (imm byte) (reg rsi) ++
-      jmp "loop_start" ++
-      label "loop_end" ++
+      jmp loop_start ++
+      label loop_end ++
       movq (imm 10) (reg rdi) ++
       call "putchar_wrapper"
       , data_code
@@ -433,8 +437,6 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       runtime_error_data ++
       label "print_int" ++
       string "%d\n" ++
-      label "print_str" ++
-      string "%s\n" ++
       label "true_string" ++
       string "True\n" ++
       label "false_string" ++
