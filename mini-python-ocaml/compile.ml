@@ -134,7 +134,9 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         arith_asm text_code1 text_code2 (addq (reg rsi) (reg rdi)),
         data_code1 ++ data_code2, `int
       | Badd, `int, `string ->
-        call "runtime_error", nop, `none
+        print_endline "Badd int string";
+        text_code1 ++ text_code2 ++ call "runtime_error"
+        , nop, `int
       | Bsub, `int, `int ->
         arith_asm text_code1 text_code2 (subq (reg rsi) (reg rdi)),
         data_code1 ++ data_code2, `int

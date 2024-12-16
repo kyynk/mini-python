@@ -65,6 +65,22 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $0, %rsp
+#print_int
+	movq $16, %rdi
+	call malloc_wrapper
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	movq $48, %rdi
+	call malloc_wrapper
+	movq $3, 0(%rax)
+	movq $3, 8(%rax)
+	movq $102, 24(%rax)
+	movq $111, 32(%rax)
+	movq $111, 40(%rax)
+	call runtime_error
+	movq 0(%rax), %rsi
+	leaq print_int, %rdi
+	call printf_wrapper
 	subq $0, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
