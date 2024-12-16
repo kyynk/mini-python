@@ -89,6 +89,31 @@ let construct_texpr_list (len:int) : texpr list =
   in
   aux [] 0
 
+let create_runtime_error () : X86_64.text * X86_64.data =
+  let error_label = "runtime_error" in
+  let error_message = "Runtime error occurred\n" in
+  let text_code =
+    label error_label ++
+    (* Prologue *)
+    pushq (reg rbp) ++
+    movq (reg rsp) (reg rbp) ++
+    (* Load the error message *)
+    leaq (lab "runtime_error_msg") rdi ++
+    (* Call printf to print the error message *)
+    call "printf" ++
+    (* Exit with a non-zero status *)
+    movq (imm 1) (reg rdi) ++
+    call "exit" ++
+    (* No need for epilogue as the process will exit *)
+    nop
+  in
+  let data_code =
+    (* Data section for the error message *)
+    label "runtime_error_msg" ++
+    string error_message
+  in
+  text_code, data_code
+
 (* return value *)
 let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * ty =
   match expr with
@@ -108,6 +133,8 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | Badd, `int, `int ->
         arith_asm text_code1 text_code2 (addq (reg rsi) (reg rdi)),
         data_code1 ++ data_code2, `int
+      | Badd, `int, `string ->
+        call "runtime_error", nop, `none
       | Bsub, `int, `int ->
         arith_asm text_code1 text_code2 (subq (reg rsi) (reg rdi)),
         data_code1 ++ data_code2, `int
@@ -267,6 +294,8 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
   | TSprint expr ->
     let text_code, data_code, expr_type = compile_expr env expr in
     begin match expr_type with
+    | `none ->
+      nop, nop
     | `int ->
       comment "print_int" ++
       text_code ++
@@ -335,6 +364,7 @@ let c_standard_function_wrapper (l:string) (fn_name:string): X86_64.text =
 let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   debug := b;
   let env = empty_env in
+  let runtime_error_text, runtime_error_data = create_runtime_error () in
   (* Compile each function *)
   let text_code, data_code = List.fold_left (fun (text_acc, data_acc) (fn, body) ->
     let fn_code, data_code = compile_def env (fn, body) in
@@ -348,9 +378,11 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       c_standard_function_wrapper "strcmp_wrapper" "strcmp" ++
       c_standard_function_wrapper "strcpy_wrapper" "strcpy" ++
       c_standard_function_wrapper "strcat_wrapper" "strcat" ++
+      runtime_error_text ++
       globl "main" ++ text_code;
     data = 
       data_code ++
+      runtime_error_data ++
       label "print_int" ++
       string "%d\n" ++
       label "print_str" ++
