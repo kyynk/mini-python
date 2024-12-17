@@ -66,7 +66,6 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $0, %rsp
-#print_int
 	movq $16, %rdi
 	call malloc_wrapper
 	movq $2, 0(%rax)
@@ -85,7 +84,7 @@ main:
 	call malloc_wrapper
 	popq %rdi
 	movq %rdi, 0(%rax)
-	movq 0(%rax), %rsi
+	movq 8(%rax), %rdi
 	leaq print_int, %rdi
 	call printf_wrapper
 	subq $0, %rsp
@@ -98,5 +97,7 @@ runtime_error_msg:
 	.string "Runtime error occurred\n"
 print_int:
 	.string "%d\n"
-print_str:
-	.string "%s\n"
+true_string:
+	.string "True\n"
+false_string:
+	.string "False\n"

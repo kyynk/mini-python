@@ -66,35 +66,46 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $0, %rsp
-#print_str
 	movq $120, %rdi
 	call malloc_wrapper
 	movq $3, 0(%rax)
 	movq $12, 8(%rax)
-	movq $104, 24(%rax)
-	movq $101, 32(%rax)
+	movq $104, 16(%rax)
+	movq $101, 24(%rax)
+	movq $108, 32(%rax)
 	movq $108, 40(%rax)
-	movq $108, 48(%rax)
-	movq $111, 56(%rax)
-	movq $44, 64(%rax)
-	movq $32, 72(%rax)
-	movq $119, 80(%rax)
-	movq $111, 88(%rax)
-	movq $114, 96(%rax)
-	movq $108, 104(%rax)
-	movq $100, 112(%rax)
+	movq $111, 48(%rax)
+	movq $44, 56(%rax)
+	movq $32, 64(%rax)
+	movq $119, 72(%rax)
+	movq $111, 80(%rax)
+	movq $114, 88(%rax)
+	movq $108, 96(%rax)
+	movq $100, 104(%rax)
+	movq $0, 112(%rax)
 	movq %rax, %rsi
-	leaq print_str, %rdi
-	call printf_wrapper
+loop_start0:
+	movq 0(%rsi), %rax
+	testq %rax, %rax
+	jz loop_end0
+	movq %rax, %rdi
+	pushq %rsi
+	call putchar_wrapper
+	popq %rsi
+	addq $8, %rsi
+	jmp loop_start0
+loop_end0:
+	movq $10, %rdi
+	call putchar_wrapper
 	subq $0, %rsp
 	xorq %rax, %rax
 	movq %rbp, %rsp
 	popq %rbp
 	ret
 	.data
-runtime_error_msg:
-	.string "Runtime error occurred\n"
 print_int:
 	.string "%d\n"
-print_str:
-	.string "%s\n"
+true_string:
+	.string "True\n"
+false_string:
+	.string "False\n"

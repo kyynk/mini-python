@@ -282,7 +282,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
     List.fold_left (fun (acc, counter) i ->
       let text_code, _, _ = compile_expr env i in
       acc ++
-      pushq (reg rax) ++
+      pushq (reg rax) ++ (* save heap address*)
       text_code ++
       movq (reg rax) (reg rsi) ++
       popq rax ++
@@ -291,7 +291,8 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
     ) (nop, 2 * byte) l |> fun (text_code, _) ->
     movq (imm ((len + 2) * byte)) (reg rdi) ++
     call "malloc_wrapper" ++
-    movq (imm len) (ind rax) ++
+    movq (imm 4) (ind rax) ++ (* type *)
+    movq (imm len) (ind ~ofs:(byte) rax) ++ (* length *)
     text_code, nop, `list
   | TErange e ->
     failwith "Unsupported TErange"
@@ -328,7 +329,10 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     let text_code, data_code, expr_type = compile_expr env expr in
     begin match expr_type with
     | `none ->
-      nop, nop
+      text_code ++
+      leaq (lab "none_string") rdi ++
+      call "printf_wrapper",
+      data_code
     | `int ->
       text_code ++
       movq (ind ~ofs:(byte) rax) (reg rdi) ++
@@ -340,8 +344,9 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       let loop_end = unique_label env "loop_end" in
       text_code ++
       movq (reg rax) (reg rsi) ++
+      (* pointer in rsi *)
       label loop_start ++
-      movq (ind rsi) (reg rax) ++
+      movq (ind ~ofs:(byte) rsi) (reg rax) ++
       testq (reg rax) (reg rax) ++
       jz loop_end ++
       movq (reg rax) (reg rdi) ++
@@ -351,6 +356,7 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       addq (imm byte) (reg rsi) ++
       jmp loop_start ++
       label loop_end ++
+      (* \n *)
       movq (imm 10) (reg rdi) ++
       call "putchar_wrapper"
       , data_code
@@ -369,8 +375,84 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       call "printf_wrapper" ++
       label b_end,
       data_code
-    | _ ->
-      failwith "Unsupported print"
+    | `list ->
+      let loop_start = unique_label env "loop_start" in
+      let loop_end = unique_label env "loop_end" in
+      let to_none = unique_label env "to_none" in
+      let to_bool = unique_label env "to_bool" in
+      let b_false = unique_label env "b_false" in
+      let to_int = unique_label env "to_int" in
+      let to_string = unique_label env "to_string" in
+      let loop_string = unique_label env "loop_string" in
+      let loop_string_end = unique_label env "loop_string_end" in
+      text_code ++
+      movq (ind ~ofs:(byte) rax) !%rdi ++ (* length *)
+      addq (imm (2*byte)) !%rax ++
+      movq !%rax !%rsi ++ (* first element *)
+      label loop_start ++
+      cmpq (imm 0) !%rdi ++
+      je loop_end ++
+      movq (ind rsi) !%rdx ++
+      cmpq (imm 0) !%rdx ++
+      je to_none ++
+      cmpq (imm 1) !%rdx ++
+      je to_bool ++
+      cmpq (imm 2) !%rdx ++
+      je to_int ++
+      cmpq (imm 3) !%rdx ++
+      je to_string ++
+      jmp loop_end ++
+      label to_none ++
+      (* none *)
+      pushq !%rsi ++
+      pushq !%rdi ++
+
+      leaq (lab "none_string") rdi ++
+      call "printf_wrapper" ++
+      
+      popq rdi ++
+      popq rsi ++
+      jmp loop_end ++
+      
+      (* bool *)
+      label to_bool ++
+      pushq !%rsi ++
+      pushq !%rdi ++
+      movq (ind ~ofs:(byte) rsi) !%rdi ++
+      cmpq (imm 0) !%rdi ++
+      je b_false ++
+      leaq (lab "true_string") rdi ++
+      call "printf_wrapper" ++
+      popq rdi ++
+      popq rsi ++
+      jmp loop_end ++
+      label b_false ++
+      leaq (lab "false_string") rdi ++
+      call "printf_wrapper" ++
+      popq rdi ++
+      popq rsi ++
+      jmp loop_end ++
+      
+      (* int *)
+      label to_int ++
+      pushq !%rsi ++
+      pushq !%rdi ++
+      movq (ind ~ofs:(byte) rsi) !%rdi ++
+      leaq (lab "print_int") rdi ++
+      call "printf_wrapper" ++
+      popq rdi ++
+      popq rsi ++
+      jmp loop_end ++
+      
+      (* string *)
+      label to_string ++
+      pushq !%rsi ++
+      pushq !%rdi ++
+
+
+      
+
+      , nop
     end
   | TSblock stmts ->
     List.fold_left (fun (acc_text, acc_data) stmt ->
@@ -440,6 +522,8 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       label "true_string" ++
       string "True\n" ++
       label "false_string" ++
-	    string "False\n"
+	    string "False\n" ++
+      label "none_string" ++
+      string "None\n";
       (* hard-coded print_int *)
   }

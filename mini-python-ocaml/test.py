@@ -7,3 +7,5 @@ print(b)
 print(c)
 e = c and d
 print(e)
+f = None
+print(f)
