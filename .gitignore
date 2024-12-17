@@ -36,3 +36,5 @@ out
 
 # output of tests
 *.out
+
+*.s
