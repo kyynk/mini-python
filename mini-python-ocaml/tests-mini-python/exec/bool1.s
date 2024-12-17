@@ -57,6 +57,7 @@ runtime_error:
 	pushq %rbp
 	movq %rsp, %rbp
 	leaq runtime_error_msg, %rdi
+	xorq %rax, %rax
 	call printf
 	movq $1, %rdi
 	call exit

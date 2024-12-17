@@ -99,6 +99,7 @@ let create_runtime_error () : X86_64.text * X86_64.data =
     movq (reg rsp) (reg rbp) ++
     (* Load the error message *)
     leaq (lab "runtime_error_msg") rdi ++
+    xorq (reg rax) (reg rax) ++
     (* Call printf to print the error message *)
     call "printf" ++
     (* Exit with a non-zero status *)
