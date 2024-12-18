@@ -292,32 +292,32 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
     end
   | TEunop (op, e) ->
     begin match op with
-      | Uneg ->
-        let text_code, data_code, expr_type = compile_expr env e in
-        begin match expr_type with
-        | `int ->
-          text_code ++
-          movq (ind rax) (reg rdi) ++
-          negq (reg rdi) ++
-          movq (imm byte) (reg rsi) ++
-          call "malloc_wrapper",
-          data_code, `int
-        | _ ->
-          failwith "Unsupported Uneg"
-        end
-      | Unot ->
-        let text_code, data_code, expr_type = compile_expr env e in
-        begin match expr_type with
-        | `bool ->
-          text_code ++
-          movq (ind rax) (reg rdi) ++
-          xorq (imm 1) (reg rdi) ++
-          movq (imm byte) (reg rsi) ++
-          call "malloc_wrapper",
-          data_code, `bool
-        | _ ->
-          failwith "Unsupported Unot"
-        end
+    | Uneg ->
+      let text_code, data_code, expr_type = compile_expr env e in
+      begin match expr_type with
+      | `int ->
+        text_code ++
+        movq (ind rax) (reg rdi) ++
+        negq (reg rdi) ++
+        movq (imm byte) (reg rsi) ++
+        call "malloc_wrapper",
+        data_code, `int
+      | _ ->
+        failwith "Unsupported Uneg"
+      end
+    | Unot ->
+      let text_code, data_code, expr_type = compile_expr env e in
+      begin match expr_type with
+      | `bool ->
+        text_code ++
+        movq (ind rax) (reg rdi) ++
+        xorq (imm 1) (reg rdi) ++
+        movq (imm byte) (reg rsi) ++
+        call "malloc_wrapper",
+        data_code, `bool
+      | _ ->
+        failwith "Unsupported Unot"
+      end
     end
   | TEcall (fn, args) ->
     failwith "Unsupported TEcall"
@@ -409,9 +409,9 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     ) (nop, nop) stmts
     |> fun (text_code, data_code) -> 
       (* remove *)
-      addq (imm (env.stack_offset - byte)) (reg rsp) ++
+      addq (imm (env.stack_offset)) (reg rsp) ++
       text_code ++
-      subq (imm (env.stack_offset - byte)) (reg rsp)
+      subq (imm (env.stack_offset)) (reg rsp)
       , data_code
   | TSfor (var, expr, body) ->
     failwith "Unsupported Sfor"
@@ -466,6 +466,7 @@ let func_print_string (env:env_t): X86_64.text =
   label "print_string" ++
   asm_print_string func_print_string_start func_print_string_end ++
   ret
+
 let func_print_list (env:env_t): X86_64.text =
   let loop_start = unique_label env "loop_start" in
   let loop_end = unique_label env "loop_end" in
@@ -476,15 +477,13 @@ let func_print_list (env:env_t): X86_64.text =
   let to_string = unique_label env "to_string" in
   let loop_string = unique_label env "loop_string" in
   let loop_string_end = unique_label env "loop_string_end" in
-  let first_time = unique_label env "first_time" in
-  let first_time_end = unique_label env "first_time_end" in
+  let first_time_skip = unique_label env "first_time_skip" in
   let list_start = unique_label env "list_start" in
   let final_end = unique_label env "final_end" in
   
   label "print_list" ++
   pushq !%rbp ++
   movq !%rsp !%rbp ++
-
   (*
   rdi: counter, start from length of list
   rax: saved first pointer element of list
@@ -494,23 +493,6 @@ let func_print_list (env:env_t): X86_64.text =
   movq (ind ~ofs:(byte) rax) !%rdi ++
   addq (imm (2 * byte)) !%rax ++
   movq !%rax !%rsi ++
-  (* rsi is the pointer of first element *)
-  label loop_start ++
-  cmpq (imm 0) !%rdi ++
-  (* rdi serves as counter *)
-  je loop_end ++
-  cmpq !%rax !%rsi ++
-  je first_time ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rax ++
-  put_character comma ++
-  put_character space ++
-  popq rax ++
-  popq rdi ++
-  popq rsi ++
-  jmp first_time_end ++
-  label first_time ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rax ++
@@ -518,7 +500,20 @@ let func_print_list (env:env_t): X86_64.text =
   popq rax ++
   popq rdi ++
   popq rsi ++
-  label first_time_end ++
+
+  label loop_start ++
+  testq !%rdi !%rdi ++
+  jz loop_end ++
+  cmpq !%rax !%rsi ++
+  je first_time_skip ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  put_character comma ++
+  put_character space ++
+  popq rdi ++
+  popq rsi ++
+  label first_time_skip ++
+  
   movq (ind rsi) !%rdx ++
   movq (ind rdx) !%rdx ++
   cmpq (imm 0) !%rdx ++
