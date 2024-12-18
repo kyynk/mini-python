@@ -24,7 +24,7 @@ let empty_env = {
 }
 
 let byte = 8
-let camma = 44
+let comma = 44
 let space = 32
 let lbrac = 91
 let rbrac = 93
@@ -48,17 +48,15 @@ let asm_print_none : X86_64.text =
   xorq !%rax !%rax ++
   call "printf_wrapper"
 
-let asm_print_bool (env:env_t): X86_64.text =
-  let l = unique_label env "cond_false" in
-  let end_label = unique_label env "end" in
+let asm_print_bool (label_false:label) (label_end:label): X86_64.text =
   movq (ind ~ofs:(byte) rdi) !%rsi ++
   cmpq (imm 0) !%rsi ++
-  je l ++
+  je label_false ++
   leaq (lab "true_string") rdi ++
-  jmp end_label ++
-  label l ++
+  jmp label_end ++
+  label label_false ++
   leaq (lab "false_string") rdi ++
-  label end_label ++
+  label label_end ++
   xorq !%rax !%rax ++
   call "printf_wrapper"
 
@@ -68,9 +66,7 @@ let asm_print_int : X86_64.text =
   xorq !%rax !%rax ++
   call "printf_wrapper"
 
-let asm_print_string (env:env_t): X86_64.text =
-  let loop_start = unique_label env "loop_start" in
-  let loop_end = unique_label env "loop_end" in
+let asm_print_string (loop_start:label) (loop_end:label): X86_64.text =
   movq !%rdi !%rax ++
   label loop_start ++
   movq (ind ~ofs:(byte) rax) !%rdi ++
@@ -453,8 +449,10 @@ let func_print_none : X86_64.text =
   ret
 
 let func_print_bool (env:env_t): X86_64.text =
+  let func_print_bool_false = unique_label env "func_print_bool_false" in
+  let func_print_bool_end = unique_label env "func_print_bool_end" in
   label "print_bool" ++
-  asm_print_bool env ++
+  asm_print_bool func_print_bool_false func_print_bool_end ++
   ret
 
 let func_print_int : X86_64.text =
@@ -463,8 +461,10 @@ let func_print_int : X86_64.text =
   ret
 
 let func_print_string (env:env_t): X86_64.text =
+  let func_print_string_start = unique_label env "func_print_string_start" in
+  let func_print_string_end = unique_label env "func_print_string_end" in
   label "print_string" ++
-  asm_print_string env ++
+  asm_print_string func_print_string_start func_print_string_end ++
   ret
 let func_print_list (env:env_t): X86_64.text =
   let loop_start = unique_label env "loop_start" in
@@ -485,9 +485,13 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rbp ++
   movq !%rsp !%rbp ++
 
+  (*
+  rdi: counter, start from length of list
+  rax: saved first pointer element of list
+  rsi: current pointer element of list 
+   *)
   label list_start ++
   movq (ind ~ofs:(byte) rax) !%rdi ++
-  (* rdi is len of list *)
   addq (imm (2 * byte)) !%rax ++
   movq !%rax !%rsi ++
   (* rsi is the pointer of first element *)
@@ -500,7 +504,7 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rax ++
-  put_character camma ++
+  put_character comma ++
   put_character space ++
   popq rax ++
   popq rdi ++
@@ -526,7 +530,7 @@ let func_print_list (env:env_t): X86_64.text =
   cmpq (imm 3) !%rdx ++
   je to_string ++
   cmpq (imm 4) !%rdx ++
-  jne "aaa" ++
+  jne "runtime_error" ++
   
   pushq !%rsi ++
   pushq !%rdi ++
@@ -636,6 +640,7 @@ let func_print_list (env:env_t): X86_64.text =
   decq !%rdi ++
   addq (imm byte) !%rsi ++
   jmp loop_start ++
+
   label final_end ++
   movq !%rbp !%rsp ++
   popq rbp ++
