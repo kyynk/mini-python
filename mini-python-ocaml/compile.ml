@@ -484,6 +484,9 @@ let func_print_list (env:env_t): X86_64.text =
   label "print_list" ++
   pushq !%rbp ++
   movq !%rsp !%rbp ++
+  subq (imm byte) !%rsp ++
+  movq (imm 0) (ind ~ofs:(-byte) rbp) ++
+  (* subq (imm (byte)) !%rsp ++ *)
   (*
   rdi: counter, start from length of list
   rax: saved first pointer element of list
@@ -512,8 +515,8 @@ let func_print_list (env:env_t): X86_64.text =
   put_character space ++
   popq rdi ++
   popq rsi ++
+
   label first_time_skip ++
-  
   movq (ind rsi) !%rdx ++
   movq (ind rdx) !%rdx ++
   cmpq (imm 0) !%rdx ++
@@ -530,12 +533,13 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rax ++
-  movq (ind ~ofs:(-2 * byte) rbp) !%rcx ++
+  movq (ind ~ofs:(-byte) rbp) !%rcx ++
   incq !%rcx ++
-  movq !%rcx (ind ~ofs:(-2 * byte) rbp) ++
+  movq !%rcx (ind ~ofs:(-byte) rbp) ++
   movq (ind rsi) !%rax ++
   jmp list_start ++
 
+  (* none *)
   label to_none ++
   pushq !%rsi ++
   pushq !%rdi ++
@@ -550,6 +554,7 @@ let func_print_list (env:env_t): X86_64.text =
   addq (imm byte) !%rsi ++
   jmp loop_start ++
 
+  (* bool *)
   label to_bool ++
   pushq !%rsi ++
   pushq !%rdi ++
@@ -579,7 +584,7 @@ let func_print_list (env:env_t): X86_64.text =
   addq (imm byte) !%rsi ++
   jmp loop_start ++
   
-
+  (* int *)
   label to_int ++
   pushq !%rsi ++
   pushq !%rdi ++
@@ -595,13 +600,14 @@ let func_print_list (env:env_t): X86_64.text =
   decq !%rdi ++
   addq (imm byte) !%rsi ++
   jmp loop_start ++
-  
 
+  (* string *)
   label to_string ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rax ++
   movq (ind rsi) !%rsi ++
+
   label loop_string ++
   movq (ind ~ofs:(byte) rsi) !%rdi ++
   testq !%rdi !%rdi ++
@@ -611,6 +617,7 @@ let func_print_list (env:env_t): X86_64.text =
   popq rsi ++
   addq (imm byte) !%rsi ++
   jmp loop_string ++
+
   label loop_string_end ++
   popq rax ++
   popq rdi ++
@@ -618,17 +625,19 @@ let func_print_list (env:env_t): X86_64.text =
   decq !%rdi ++
   addq (imm byte) !%rsi ++
   jmp loop_start ++
+
+
   label loop_end ++
   pushq !%rsi ++
   pushq !%rdi ++
   put_character rbrac ++
   popq rdi ++
   popq rsi ++
-  movq (ind ~ofs:(-2 * byte) rbp) !%rcx ++
+  movq (ind ~ofs:(-byte) rbp) !%rcx ++
   testq !%rcx !%rcx ++
   jz final_end ++
   decq !%rcx ++
-  movq !%rcx (ind ~ofs:(-2 * byte) rbp) ++
+  movq !%rcx (ind ~ofs:(-byte) rbp) ++
   popq rax ++
   popq rdi ++
   popq rsi ++
@@ -636,7 +645,9 @@ let func_print_list (env:env_t): X86_64.text =
   addq (imm byte) !%rsi ++
   jmp loop_start ++
 
+
   label final_end ++
+  addq (imm byte) !%rsp ++
   movq !%rbp !%rsp ++
   popq rbp ++
   ret

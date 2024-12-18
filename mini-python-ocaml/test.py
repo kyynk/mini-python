@@ -1,12 +1,12 @@
 b = True
-c = False
-d = "hello"
-e = [1, 2, 3]
-f = None
 print(b)
+c = False
 print(c)
+d = "hello"
 print(d)
+e = [1, 2, 3]
 print(e)
+f = None
 print(f)
 g = [[2, True, 4]]
 print(g)
