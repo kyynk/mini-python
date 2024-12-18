@@ -468,19 +468,19 @@ let func_print_string (env:env_t): X86_64.text =
   ret
 
 let func_print_list (env:env_t): X86_64.text =
-  let loop_start = unique_label env "loop_start" in
-  let loop_end = unique_label env "loop_end" in
-  let to_none = unique_label env "to_none" in
-  let to_bool = unique_label env "to_bool" in
-  let b_false = unique_label env "b_false" in
-  let b_true_end = unique_label env "b_true_end" in
-  let to_int = unique_label env "to_int" in
-  let to_string = unique_label env "to_string" in
-  let loop_string = unique_label env "loop_string" in
-  let loop_string_end = unique_label env "loop_string_end" in
-  let first_time_skip = unique_label env "first_time_skip" in
   let list_start = unique_label env "list_start" in
-  let final_end = unique_label env "final_end" in
+  let list_loop_start = unique_label env "list_loop_start" in
+  let list_loop_end = unique_label env "list_loop_end" in
+  let list_loop_first_time = unique_label env "list_loop_first_time" in
+  let none_case = unique_label env "none_case" in
+  let bool_case = unique_label env "bool_case" in
+  let bool_label_false = unique_label env "bool_label_false" in
+  let bool_label_end = unique_label env "bool_label_end" in
+  let int_case = unique_label env "int_case" in
+  let string_case = unique_label env "string_case" in
+  let string_loop = unique_label env "string_loop" in
+  let string_loop_end = unique_label env "string_loop_end" in
+  let list_end = unique_label env "list_end" in
   
   label "print_list" ++
   pushq !%rbp ++
@@ -504,11 +504,11 @@ let func_print_list (env:env_t): X86_64.text =
   popq rdi ++
   popq rsi ++
 
-  label loop_start ++
+  label list_loop_start ++
   testq !%rcx !%rcx ++
-  jz loop_end ++
+  jz list_loop_end ++
   cmpq !%rdi !%rsi ++
-  je first_time_skip ++
+  je list_loop_first_time ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
@@ -518,20 +518,19 @@ let func_print_list (env:env_t): X86_64.text =
   popq rdi ++
   popq rsi ++
 
-  label first_time_skip ++
+  label list_loop_first_time ++
   movq (ind rdi) !%rdx ++
   movq (ind rdx) !%rdx ++
   cmpq (imm 0) !%rdx ++
-  je to_none ++
+  je none_case ++
   cmpq (imm 1) !%rdx ++
-  je to_bool ++
+  je bool_case ++
   cmpq (imm 2) !%rdx ++
-  je to_int ++
+  je int_case ++
   cmpq (imm 3) !%rdx ++
-  je to_string ++
+  je string_case ++
   cmpq (imm 4) !%rdx ++
   jne "runtime_error" ++
-  
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
@@ -541,8 +540,9 @@ let func_print_list (env:env_t): X86_64.text =
   movq (ind rdi) !%rdi ++
   jmp list_start ++
 
+
   (* none *)
-  label to_none ++
+  label none_case ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
@@ -552,24 +552,26 @@ let func_print_list (env:env_t): X86_64.text =
   popq rsi ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
-  jmp loop_start ++
+  jmp list_loop_start ++
+
 
   (* bool *)
-  label to_bool ++
+  label bool_case ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
   movq (ind rdi) !%rdi ++
-  asm_print_bool b_false b_true_end ++
+  asm_print_bool bool_label_false bool_label_end ++
   popq rcx ++
   popq rdi ++
   popq rsi ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
-  jmp loop_start ++
+  jmp list_loop_start ++
+
 
   (* int *)
-  label to_int ++
+  label int_case ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
@@ -580,24 +582,24 @@ let func_print_list (env:env_t): X86_64.text =
   popq rsi ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
-  jmp loop_start ++
+  jmp list_loop_start ++
+
 
   (* string *)
-  label to_string ++
+  label string_case ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
   movq (ind rdi) !%rdi ++
-  asm_print_string loop_string loop_string_end ++
+  asm_print_string string_loop string_loop_end ++
   popq rcx ++
   popq rdi ++
   popq rsi ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
-  jmp loop_start ++
+  jmp list_loop_start ++
 
-
-  label loop_end ++
+  label list_loop_end ++
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
@@ -607,7 +609,7 @@ let func_print_list (env:env_t): X86_64.text =
   popq rsi ++
   movq (ind ~ofs:(-byte) rbp) !%rax ++
   testq !%rax !%rax ++
-  jz final_end ++
+  jz list_end ++
   decq !%rax ++
   movq !%rax (ind ~ofs:(-byte) rbp) ++
   popq rcx ++
@@ -615,10 +617,9 @@ let func_print_list (env:env_t): X86_64.text =
   popq rsi ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
-  jmp loop_start ++
+  jmp list_loop_start ++
 
-
-  label final_end ++
+  label list_end ++
   addq (imm byte) !%rsp ++
   movq !%rbp !%rsp ++
   popq rbp ++
