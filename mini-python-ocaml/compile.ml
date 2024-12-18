@@ -473,6 +473,7 @@ let func_print_list (env:env_t): X86_64.text =
   let to_none = unique_label env "to_none" in
   let to_bool = unique_label env "to_bool" in
   let b_false = unique_label env "b_false" in
+  let b_true_end = unique_label env "b_true_end" in
   let to_int = unique_label env "to_int" in
   let to_string = unique_label env "to_string" in
   let loop_string = unique_label env "loop_string" in
@@ -486,38 +487,39 @@ let func_print_list (env:env_t): X86_64.text =
   movq !%rsp !%rbp ++
   subq (imm byte) !%rsp ++
   movq (imm 0) (ind ~ofs:(-byte) rbp) ++
-  (* subq (imm (byte)) !%rsp ++ *)
   (*
-  rdi: counter, start from length of list
-  rax: saved first pointer element of list
-  rsi: current pointer element of list 
+  rcx: counter, start from length of list
+  rsi: saved first pointer element of list
+  rdi: current pointer element of list 
    *)
   label list_start ++
-  movq (ind ~ofs:(byte) rax) !%rdi ++
-  addq (imm (2 * byte)) !%rax ++
-  movq !%rax !%rsi ++
+  movq (ind ~ofs:(byte) rdi) !%rcx ++
+  addq (imm (2 * byte)) !%rdi ++
+  movq !%rdi !%rsi ++
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rax ++
+  pushq !%rcx ++
   put_character lbrac ++
-  popq rax ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
 
   label loop_start ++
-  testq !%rdi !%rdi ++
+  testq !%rcx !%rcx ++
   jz loop_end ++
-  cmpq !%rax !%rsi ++
+  cmpq !%rdi !%rsi ++
   je first_time_skip ++
   pushq !%rsi ++
   pushq !%rdi ++
+  pushq !%rcx ++
   put_character comma ++
   put_character space ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
 
   label first_time_skip ++
-  movq (ind rsi) !%rdx ++
+  movq (ind rdi) !%rdx ++
   movq (ind rdx) !%rdx ++
   cmpq (imm 0) !%rdx ++
   je to_none ++
@@ -532,117 +534,87 @@ let func_print_list (env:env_t): X86_64.text =
   
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rax ++
-  movq (ind ~ofs:(-byte) rbp) !%rcx ++
-  incq !%rcx ++
-  movq !%rcx (ind ~ofs:(-byte) rbp) ++
-  movq (ind rsi) !%rax ++
+  pushq !%rcx ++
+  movq (ind ~ofs:(-byte) rbp) !%rax ++
+  incq !%rax ++
+  movq !%rax (ind ~ofs:(-byte) rbp) ++
+  movq (ind rdi) !%rdi ++
   jmp list_start ++
 
   (* none *)
   label to_none ++
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rax ++
-  leaq (lab "none_string") rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper" ++
-  popq rax ++
+  pushq !%rcx ++
+  asm_print_none ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
-  decq !%rdi ++
-  addq (imm byte) !%rsi ++
+  decq !%rcx ++
+  addq (imm byte) !%rdi ++
   jmp loop_start ++
 
   (* bool *)
   label to_bool ++
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rax ++
-  movq (ind rsi) !%rsi ++
-  movq (ind ~ofs:(byte) rsi) !%rdi ++
-  cmpq (imm 0) !%rdi ++
-  je b_false ++
-  leaq (lab "true_string") rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper" ++
-  popq rax ++
+  pushq !%rcx ++
+  movq (ind rdi) !%rdi ++
+  asm_print_bool b_false b_true_end ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
-  decq !%rdi ++
-  addq (imm byte) !%rsi ++
+  decq !%rcx ++
+  addq (imm byte) !%rdi ++
   jmp loop_start ++
 
-  label b_false ++
-  leaq (lab "false_string") rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper" ++
-  popq rax ++
-  popq rdi ++
-  popq rsi ++
-  decq !%rdi ++
-  addq (imm byte) !%rsi ++
-  jmp loop_start ++
-  
   (* int *)
   label to_int ++
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rax ++
-  movq (ind rsi) !%rsi ++
-  movq (ind ~ofs:(byte) rsi) !%rsi ++
-  leaq (lab "print_inta") rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper" ++
-  popq rax ++
+  pushq !%rcx ++
+  movq (ind rdi) !%rdi ++
+  asm_print_int ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
-  decq !%rdi ++
-  addq (imm byte) !%rsi ++
+  decq !%rcx ++
+  addq (imm byte) !%rdi ++
   jmp loop_start ++
 
   (* string *)
   label to_string ++
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rax ++
-  movq (ind rsi) !%rsi ++
-
-  label loop_string ++
-  movq (ind ~ofs:(byte) rsi) !%rdi ++
-  testq !%rdi !%rdi ++
-  jz loop_string_end ++
-  pushq !%rsi ++
-  call "putchar_wrapper" ++
-  popq rsi ++
-  addq (imm byte) !%rsi ++
-  jmp loop_string ++
-
-  label loop_string_end ++
-  popq rax ++
+  pushq !%rcx ++
+  movq (ind rdi) !%rdi ++
+  asm_print_string loop_string loop_string_end ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
-  decq !%rdi ++
-  addq (imm byte) !%rsi ++
+  decq !%rcx ++
+  addq (imm byte) !%rdi ++
   jmp loop_start ++
 
 
   label loop_end ++
   pushq !%rsi ++
   pushq !%rdi ++
+  pushq !%rcx ++
   put_character rbrac ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
-  movq (ind ~ofs:(-byte) rbp) !%rcx ++
-  testq !%rcx !%rcx ++
+  movq (ind ~ofs:(-byte) rbp) !%rax ++
+  testq !%rax !%rax ++
   jz final_end ++
-  decq !%rcx ++
-  movq !%rcx (ind ~ofs:(-byte) rbp) ++
-  popq rax ++
+  decq !%rax ++
+  movq !%rax (ind ~ofs:(-byte) rbp) ++
+  popq rcx ++
   popq rdi ++
   popq rsi ++
-  decq !%rdi ++
-  addq (imm byte) !%rsi ++
+  decq !%rcx ++
+  addq (imm byte) !%rdi ++
   jmp loop_start ++
 
 
