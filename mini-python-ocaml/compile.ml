@@ -34,7 +34,7 @@ let put_character (n:int) : X86_64.text =
   movq (imm n) !%rdi ++
   call "putchar_wrapper"
 
-  let unique_label (env: env_t) (prefix: string) : string =
+let unique_label (env: env_t) (prefix: string) : string =
   let counter =
     match StringMap.find_opt prefix env.counters with
     | Some c -> c
@@ -43,6 +43,45 @@ let put_character (n:int) : X86_64.text =
   env.counters <- StringMap.add prefix (counter + 1) env.counters;
   Printf.sprintf "%s%d" prefix counter
 
+let asm_print_none : X86_64.text = 
+  leaq (lab "none_string") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper"
+
+let asm_print_bool (env:env_t): X86_64.text =
+  let l = unique_label env "cond_false" in
+  let end_label = unique_label env "end" in
+  movq (ind ~ofs:(byte) rdi) !%rsi ++
+  cmpq (imm 0) !%rsi ++
+  je l ++
+  leaq (lab "true_string") rdi ++
+  jmp end_label ++
+  label l ++
+  leaq (lab "false_string") rdi ++
+  label end_label ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper"
+
+let asm_print_int : X86_64.text =
+  movq (ind ~ofs:(byte) rdi) !%rsi ++
+  leaq (lab "print_inta") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper"
+
+let asm_print_string (env:env_t): X86_64.text =
+  let loop_start = unique_label env "loop_start" in
+  let loop_end = unique_label env "loop_end" in
+  movq !%rdi !%rax ++
+  label loop_start ++
+  movq (ind ~ofs:(byte) rax) !%rdi ++
+  testq !%rdi !%rdi ++
+  jz loop_end ++
+  pushq !%rax ++
+  call "putchar_wrapper" ++
+  popq rax ++
+  addq (imm byte) !%rax ++
+  jmp loop_start ++
+  label loop_end
 
 let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * ty =
   match c with
@@ -79,8 +118,8 @@ let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * t
     ,nop , `string
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
-    let var, ofs, var_type = StringMap.find v.v_name env.vars in
-      movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
+  let var, ofs, var_type = StringMap.find v.v_name env.vars in
+    movq (ind ~ofs:(ofs) rbp) (reg rax), nop, var_type
 
 let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text) : X86_64.text =
   code1 ++
@@ -149,7 +188,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         cmpq (imm 0) !%rdi ++
         je l ++
         text_code2 ++
-        label l        
+        label l     
         , data_code1 ++ data_code2, `bool  
       end
     | Bor ->
@@ -339,175 +378,33 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     begin match expr_type with
     | `none ->
       text_code ++
-      leaq (lab "none_string") rdi ++
-      call "printf_wrapper",
+      call "print_none" ++
+      put_character newline,
+      data_code
+    | `bool ->
+      text_code ++
+      movq !%rax !%rdi ++
+      call "print_bool" ++
+      put_character newline,
       data_code
     | `int ->
       text_code ++
-      movq (ind ~ofs:(byte) rax) (reg rdi) ++
-      leaq (lab "print_int") rdi ++
-      call "printf_wrapper",
+      movq !%rax !%rdi ++
+      call "print_int" ++
+      put_character newline,
       data_code
     | `string ->
-      let loop_start = unique_label env "loop_start" in
-      let loop_end = unique_label env "loop_end" in
       text_code ++
-      movq (reg rax) (reg rsi) ++
-      (* pointer in rsi *)
-      label loop_start ++
-      movq (ind ~ofs:(byte) rsi) (reg rax) ++
-      testq (reg rax) (reg rax) ++
-      jz loop_end ++
-      movq (reg rax) (reg rdi) ++
-      pushq (reg rsi) ++
-      call "putchar_wrapper" ++
-      popq rsi ++
-      addq (imm byte) (reg rsi) ++
-      jmp loop_start ++
-      label loop_end ++
-      (* \n *)
-      movq (imm 10) (reg rdi) ++
-      call "putchar_wrapper"
-      , data_code
-    | `bool ->
-      let b_false = unique_label env "b_false" in
-      let b_end = unique_label env "b_end" in
-      text_code ++
-      movq (ind ~ofs:(byte) rax) !%rsi ++
-      testq !%rsi !%rsi ++
-      jz b_false ++
-      leaq (lab "true_string") rdi ++
-      call "printf_wrapper" ++
-      jmp b_end ++
-      label b_false ++
-      leaq (lab "false_string") rdi ++
-      call "printf_wrapper" ++
-      label b_end,
+      movq !%rax !%rdi ++
+      call "print_string" ++
+      put_character newline,
       data_code
     | `list ->
-      let loop_start = unique_label env "loop_start" in
-      let loop_end = unique_label env "loop_end" in
-      let to_none = unique_label env "to_none" in
-      let to_bool = unique_label env "to_bool" in
-      let b_false = unique_label env "b_false" in
-      let to_int = unique_label env "to_int" in
-      let to_string = unique_label env "to_string" in
-      let loop_string = unique_label env "loop_string" in
-      let loop_string_end = unique_label env "loop_string_end" in
-      let first_time = unique_label env "first_time" in
-      let first_time_end = unique_label env "first_time_end" in
       text_code ++
-      movq (ind ~ofs:(byte) rax) !%rdi ++
-      (* rdi is len of list *)
-      addq (imm (2 * byte)) !%rax ++
-      movq !%rax !%rsi ++
-      (* rsi is the pointer of first element *)
-      label loop_start ++
-      cmpq (imm 0) !%rdi ++
-      (* rdi serves as counter *)
-      je loop_end ++
-      cmpq !%rax !%rsi ++
-      je first_time ++
-      pushq !%rsi ++
-      pushq !%rdi ++
-      put_character camma ++
-      put_character space ++
-      popq rdi ++
-      popq rsi ++
-      jmp first_time_end ++
-      label first_time ++
-      pushq !%rsi ++
-      pushq !%rdi ++
-      put_character lbrac ++
-      popq rdi ++
-      popq rsi ++
-      label first_time_end ++
-      movq (ind rsi) !%rdx ++
-      movq (ind rdx) !%rdx ++
-      cmpq (imm 0) !%rdx ++
-      je to_none ++
-      cmpq (imm 1) !%rdx ++
-      je to_bool ++
-      cmpq (imm 2) !%rdx ++
-      je to_int ++
-      cmpq (imm 3) !%rdx ++
-      je to_string ++
-      jmp loop_start ++
-
-
-      label to_none ++
-      pushq !%rsi ++
-      pushq !%rdi ++
-      leaq (lab "none_string") rdi ++
-      call "printf_wrapper" ++
-      popq rdi ++
-      popq rsi ++
-      decq !%rdi ++
-      addq (imm byte) !%rsi ++
-      jmp loop_start ++
-
-
-      label to_bool ++
-      pushq !%rsi ++
-      pushq !%rdi ++
-      movq (ind ~ofs:(byte) rsi) !%rdi ++
-      cmpq (imm 0) !%rdi ++
-      je b_false ++
-      leaq (lab "true_string") rdi ++
-      call "printf_wrapper" ++
-      popq rdi ++
-      popq rsi ++
-      decq !%rdi ++
-      addq (imm byte) !%rsi ++
-      jmp loop_start ++
-
-      label b_false ++
-      leaq (lab "false_string") rdi ++
-      call "printf_wrapper" ++
-      popq rdi ++
-      popq rsi ++
-      decq !%rdi ++
-      addq (imm byte) !%rsi ++
-      jmp loop_start ++
-      
-
-      label to_int ++
-      pushq !%rsi ++
-      pushq !%rdi ++
-      movq (ind rsi) !%rsi ++
-      movq (ind ~ofs:(byte) rsi) !%rsi ++
-      leaq (lab "print_int") rdi ++
-      call "printf_wrapper" ++
-      popq rdi ++
-      popq rsi ++
-      decq !%rdi ++
-      addq (imm byte) !%rsi ++
-      jmp loop_start ++
-      
-
-      label to_string ++
-      pushq !%rsi ++
-      pushq !%rdi ++
-      movq (ind rsi) !%rsi ++
-      label loop_string ++
-      movq (ind ~ofs:(byte) rsi) !%rdi ++
-      testq !%rdi !%rdi ++
-      jz loop_string_end ++
-      pushq !%rsi ++
-      call "putchar_wrapper" ++
-      popq rsi ++
-      addq (imm byte) !%rsi ++
-      jmp loop_string ++
-      label loop_string_end ++
-      popq rdi ++
-      popq rsi ++
-      decq !%rdi ++
-      addq (imm byte) !%rsi ++
-      jmp loop_start ++
-      label loop_end ++
-      put_character rbrac ++
-      put_character newline
-      , nop
+      movq !%rax !%rdi ++
+      call "print_list" ++
+      put_character newline, 
+      data_code
     end
   | TSblock stmts ->
     List.fold_left (fun (acc_text, acc_data) stmt ->
@@ -515,9 +412,10 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       acc_text ++ text_code, acc_data ++ data_code
     ) (nop, nop) stmts
     |> fun (text_code, data_code) -> 
-      addq (imm (env.stack_offset)) (reg rsp) ++
+      (* remove *)
+      addq (imm (env.stack_offset - byte)) (reg rsp) ++
       text_code ++
-      subq (imm (env.stack_offset)) (reg rsp)
+      subq (imm (env.stack_offset - byte)) (reg rsp)
       , data_code
   | TSfor (var, expr, body) ->
     failwith "Unsupported Sfor"
@@ -544,9 +442,202 @@ let c_standard_function_wrapper (l:string) (fn_name:string): X86_64.text =
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
   andq (imm (-16)) (reg rsp) ++
-  xorq (reg rax) (reg rax) ++
   call fn_name ++
   movq (reg rbp) (reg rsp) ++
+  popq rbp ++
+  ret
+
+let func_print_none : X86_64.text =
+  label "print_none" ++
+  asm_print_none ++
+  ret
+
+let func_print_bool (env:env_t): X86_64.text =
+  label "print_bool" ++
+  asm_print_bool env ++
+  ret
+
+let func_print_int : X86_64.text =
+  label "print_int" ++
+  asm_print_int ++
+  ret
+
+let func_print_string (env:env_t): X86_64.text =
+  label "print_string" ++
+  asm_print_string env ++
+  ret
+let func_print_list (env:env_t): X86_64.text =
+  let loop_start = unique_label env "loop_start" in
+  let loop_end = unique_label env "loop_end" in
+  let to_none = unique_label env "to_none" in
+  let to_bool = unique_label env "to_bool" in
+  let b_false = unique_label env "b_false" in
+  let to_int = unique_label env "to_int" in
+  let to_string = unique_label env "to_string" in
+  let loop_string = unique_label env "loop_string" in
+  let loop_string_end = unique_label env "loop_string_end" in
+  let first_time = unique_label env "first_time" in
+  let first_time_end = unique_label env "first_time_end" in
+  let list_start = unique_label env "list_start" in
+  let final_end = unique_label env "final_end" in
+  
+  label "print_list" ++
+  pushq !%rbp ++
+  movq !%rsp !%rbp ++
+
+  label list_start ++
+  movq (ind ~ofs:(byte) rax) !%rdi ++
+  (* rdi is len of list *)
+  addq (imm (2 * byte)) !%rax ++
+  movq !%rax !%rsi ++
+  (* rsi is the pointer of first element *)
+  label loop_start ++
+  cmpq (imm 0) !%rdi ++
+  (* rdi serves as counter *)
+  je loop_end ++
+  cmpq !%rax !%rsi ++
+  je first_time ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  put_character camma ++
+  put_character space ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  jmp first_time_end ++
+  label first_time ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  put_character lbrac ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  label first_time_end ++
+  movq (ind rsi) !%rdx ++
+  movq (ind rdx) !%rdx ++
+  cmpq (imm 0) !%rdx ++
+  je to_none ++
+  cmpq (imm 1) !%rdx ++
+  je to_bool ++
+  cmpq (imm 2) !%rdx ++
+  je to_int ++
+  cmpq (imm 3) !%rdx ++
+  je to_string ++
+  cmpq (imm 4) !%rdx ++
+  jne "aaa" ++
+  
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  movq (ind ~ofs:(-2 * byte) rbp) !%rcx ++
+  incq !%rcx ++
+  movq !%rcx (ind ~ofs:(-2 * byte) rbp) ++
+  movq (ind rsi) !%rax ++
+  jmp list_start ++
+
+  label to_none ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  leaq (lab "none_string") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  decq !%rdi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_start ++
+
+  label to_bool ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  movq (ind rsi) !%rsi ++
+  movq (ind ~ofs:(byte) rsi) !%rdi ++
+  cmpq (imm 0) !%rdi ++
+  je b_false ++
+  leaq (lab "true_string") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  decq !%rdi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_start ++
+
+  label b_false ++
+  leaq (lab "false_string") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  decq !%rdi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_start ++
+  
+
+  label to_int ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  movq (ind rsi) !%rsi ++
+  movq (ind ~ofs:(byte) rsi) !%rsi ++
+  leaq (lab "print_inta") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  decq !%rdi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_start ++
+  
+
+  label to_string ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  movq (ind rsi) !%rsi ++
+  label loop_string ++
+  movq (ind ~ofs:(byte) rsi) !%rdi ++
+  testq !%rdi !%rdi ++
+  jz loop_string_end ++
+  pushq !%rsi ++
+  call "putchar_wrapper" ++
+  popq rsi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_string ++
+  label loop_string_end ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  decq !%rdi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_start ++
+  label loop_end ++
+  pushq !%rsi ++
+  pushq !%rdi ++
+  put_character rbrac ++
+  popq rdi ++
+  popq rsi ++
+  movq (ind ~ofs:(-2 * byte) rbp) !%rcx ++
+  testq !%rcx !%rcx ++
+  jz final_end ++
+  decq !%rcx ++
+  movq !%rcx (ind ~ofs:(-2 * byte) rbp) ++
+  popq rax ++
+  popq rdi ++
+  popq rsi ++
+  decq !%rdi ++
+  addq (imm byte) !%rsi ++
+  jmp loop_start ++
+  label final_end ++
+  movq !%rbp !%rsp ++
   popq rbp ++
   ret
 
@@ -567,12 +658,18 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       c_standard_function_wrapper "strcmp_wrapper" "strcmp" ++
       c_standard_function_wrapper "strcpy_wrapper" "strcpy" ++
       c_standard_function_wrapper "strcat_wrapper" "strcat" ++
+      func_print_none ++
+      func_print_bool env ++
+      func_print_int ++
+      func_print_string env ++
+      func_print_list env ++
       runtime_error_text ++
-      globl "main" ++ text_code;
+      globl "main" ++ text_code ++
+      label "aaa";
     data = 
       data_code ++
       runtime_error_data ++
-      label "print_int" ++
+      label "print_inta" ++
       string "%d" ++
       label "true_string" ++
       string "True" ++
