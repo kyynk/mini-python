@@ -30,6 +30,7 @@ let asm_print_none : X86_64.text =
   xorq !%rax !%rax ++
   call "printf_wrapper"
 
+
 let asm_print_bool (label_false:label) (label_end:label): X86_64.text =
   movq (ind ~ofs:(byte) rdi) !%rsi ++
   cmpq (imm 0) !%rsi ++
@@ -42,11 +43,13 @@ let asm_print_bool (label_false:label) (label_end:label): X86_64.text =
   xorq !%rax !%rax ++
   call "printf_wrapper"
 
+
 let asm_print_int : X86_64.text =
   movq (ind ~ofs:(byte) rdi) !%rsi ++
   leaq (lab "print_inta") rdi ++
   xorq !%rax !%rax ++
   call "printf_wrapper"
+
 
 let asm_print_string (loop_start:label) (loop_end:label): X86_64.text =
   movq !%rdi !%rax ++
@@ -60,6 +63,7 @@ let asm_print_string (loop_start:label) (loop_end:label): X86_64.text =
   addq (imm byte) !%rax ++
   jmp loop_start ++
   label loop_end
+
 
 let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text) : X86_64.text =
   code1 ++
@@ -75,6 +79,7 @@ let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text)
   popq rdi ++
   movq (reg rdi) (ind rax)
 
+
 let c_standard_function_wrapper (l:label) (fn_name:string): X86_64.text =
   label l ++
   pushq (reg rbp) ++
@@ -84,6 +89,7 @@ let c_standard_function_wrapper (l:label) (fn_name:string): X86_64.text =
   movq (reg rbp) (reg rsp) ++
   popq rbp ++
   ret
+
 
 let emit_runtime_error (env:env_t): X86_64.text * X86_64.data =
   let error_text_label = "runtime_error" in
@@ -102,6 +108,7 @@ let emit_runtime_error (env:env_t): X86_64.text * X86_64.data =
     string "Runtime error occurred\n"
   in
   text_code, data_code
+
 
 let construct_texpr_list (len:int) : texpr list =
   let rec aux acc i =

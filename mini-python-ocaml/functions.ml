@@ -4,14 +4,14 @@ open Utils
 
 let func_print_none : X86_64.text =
   label "print_none" ++
-  asm_print_none ++
+  Utils.asm_print_none ++
   ret
 
 let func_print_bool (env:env_t): X86_64.text =
   let func_print_bool_false = unique_label env "func_print_bool_false" in
   let func_print_bool_end = unique_label env "func_print_bool_end" in
   label "print_bool" ++
-  asm_print_bool func_print_bool_false func_print_bool_end ++
+  Utils.asm_print_bool func_print_bool_false func_print_bool_end ++
   ret
 
 let func_print_int : X86_64.text =
@@ -23,7 +23,7 @@ let func_print_string (env:env_t): X86_64.text =
   let func_print_string_start = unique_label env "func_print_string_start" in
   let func_print_string_end = unique_label env "func_print_string_end" in
   label "print_string" ++
-  asm_print_string func_print_string_start func_print_string_end ++
+  Utils.asm_print_string func_print_string_start func_print_string_end ++
   ret
 
 let func_print_list (env:env_t): X86_64.text =
@@ -105,7 +105,7 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rsi ++
   pushq !%rdi ++
   pushq !%rcx ++
-  asm_print_none ++
+  Utils.asm_print_none ++
   popq rcx ++
   popq rdi ++
   popq rsi ++
@@ -120,7 +120,7 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rdi ++
   pushq !%rcx ++
   movq (ind rdi) !%rdi ++
-  asm_print_bool bool_label_false bool_label_end ++
+  Utils.asm_print_bool bool_label_false bool_label_end ++
   popq rcx ++
   popq rdi ++
   popq rsi ++
@@ -135,7 +135,7 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rdi ++
   pushq !%rcx ++
   movq (ind rdi) !%rdi ++
-  asm_print_int ++
+  Utils.asm_print_int ++
   popq rcx ++
   popq rdi ++
   popq rsi ++
@@ -150,7 +150,7 @@ let func_print_list (env:env_t): X86_64.text =
   pushq !%rdi ++
   pushq !%rcx ++
   movq (ind rdi) !%rdi ++
-  asm_print_string string_loop string_loop_end ++
+  Utils.asm_print_string string_loop string_loop_end ++
   popq rcx ++
   popq rdi ++
   popq rsi ++
