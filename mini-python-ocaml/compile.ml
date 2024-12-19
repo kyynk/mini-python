@@ -173,10 +173,41 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | Badd, `int, `int ->
         arith_asm text_code1 text_code2 (addq (reg rsi) (reg rdi)),
         data_code1 ++ data_code2, `int
-      | Badd, `int, `string ->
+      | Badd, `int, `string | Badd, `string, `int | Badd, `bool, `int | Badd, `int, `bool ->
         print_endline "Badd int string";
         text_code1 ++ text_code2 ++ call "runtime_error"
         , nop, `int
+      | Badd, `string, `string ->
+        print_endline "Badd string string";
+        let concat_code = 
+          (* 計算第一個字符串長度 *)
+          movq (reg rax) (reg rdi) ++    (* 第一個字符串地址 -> rdi *)
+          call "strlen" ++              (* 計算第一個字符串長度 *)
+          movq (reg rax) (reg rbx) ++   (* 保存第一個字符串長度到 rbx *)
+    
+          (* 計算第二個字符串長度 *)
+          movq (reg rsi) (reg rdi) ++   (* 第二個字符串地址 -> rdi *)
+          call "strlen" ++              (* 計算第二個字符串長度 *)
+          addq (reg rbx) (reg rax) ++   (* 總長度 = len1 + len2 *)
+          addq (imm 1) (reg rax) ++     (* 包括終止符 \0 *)
+    
+          (* 分配內存 *)
+          movq (reg rax) (reg rdi) ++
+          call "malloc_wrapper" ++
+    
+          (* 複製第一個字符串 *)
+          movq (reg rsi) (reg rdi) ++   (* 第一個字符串地址 -> rdi *)
+          movq (reg rax) (reg rsi) ++   (* 新分配內存地址 -> rsi *)
+          call "strcpy_wrapper" ++
+    
+          (* 拼接第二個字符串 *)
+          movq (reg rsi) (reg rdi) ++   (* 新分配內存地址 -> rdi *)
+          movq (reg rsi) (reg rsi) ++   (* 第二個字符串地址 -> rsi *)
+          call "strcat_wrapper" ++
+          movq (reg rdi) (ind rax)      (* 保存結果地址 *)
+        in
+        concat_code, nop, `string
+         
       | Bsub, `int, `int ->
         arith_asm text_code1 text_code2 (subq (reg rsi) (reg rdi)),
         data_code1 ++ data_code2, `int
