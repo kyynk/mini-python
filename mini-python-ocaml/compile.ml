@@ -297,10 +297,14 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       begin match expr_type with
       | `int ->
         text_code ++
-        movq (ind rax) (reg rdi) ++
-        negq (reg rdi) ++
-        movq (imm byte) (reg rsi) ++
-        call "malloc_wrapper",
+        movq (ind ~ofs:(byte) rax) !%rdi ++
+        negq !%rdi ++
+        pushq !%rdi ++
+        movq (imm byte) !%rdi ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (imm 2) (ind rax) ++
+        movq !%rdi (ind ~ofs:(byte) rax),
         data_code, `int
       | _ ->
         failwith "Unsupported Uneg"
@@ -310,10 +314,14 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       begin match expr_type with
       | `bool ->
         text_code ++
-        movq (ind rax) (reg rdi) ++
-        xorq (imm 1) (reg rdi) ++
-        movq (imm byte) (reg rsi) ++
-        call "malloc_wrapper",
+        movq (ind ~ofs:(byte) rax) !%rdi ++
+        xorq (imm 1) !%rdi ++
+        pushq !%rdi ++
+        movq (imm byte) !%rdi ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        movq (imm 1) (ind rax) ++
+        movq !%rdi (ind ~ofs:(byte) rax),
         data_code, `bool
       | _ ->
         failwith "Unsupported Unot"
