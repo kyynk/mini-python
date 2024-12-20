@@ -56,33 +56,27 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
   | TEbinop (op, e1, e2) ->
     begin match op with
     | Band ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      begin
-      if expr_type1 <> `bool || expr_type2 <> `bool then failwith "compilation error";
-        let l = unique_label env "cond_false" in
-        text_code1 ++
-        movq (ind ~ofs:(byte) rax) !%rdi ++
-        cmpq (imm 0) !%rdi ++
-        je l ++
-        text_code2 ++
-        label l
-        , data_code1 ++ data_code2, `bool  
-      end
+      let text_code1, data_code1, _ = compile_expr env e1 in
+      let text_code2, data_code2, _ = compile_expr env e2 in
+      let l = unique_label env "cond_false" in
+      text_code1 ++
+      movq (ind ~ofs:(byte) rax) !%rdi ++
+      cmpq (imm 0) !%rdi ++
+      je l ++
+      text_code2 ++
+      label l, 
+      data_code1 ++ data_code2, `bool  
     | Bor ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      begin
-      if expr_type1 <> `bool || expr_type2 <> `bool then failwith "compilation error";
-        let l = unique_label env "cond_true" in
-        text_code1 ++
-        movq (ind ~ofs:(byte) rax) !%rdi ++
-        cmpq (imm 0) !%rdi ++
-        jne l ++
-        text_code2 ++
-        label l
-        , data_code1 ++ data_code2, `bool
-      end
+      let l = unique_label env "cond_true" in
+      text_code1 ++
+      movq (ind ~ofs:(byte) rax) !%rdi ++
+      cmpq (imm 0) !%rdi ++
+      jne l ++
+      text_code2 ++
+      label l,
+      data_code1 ++ data_code2, `bool
     | Badd | Bsub | Bmul | Bdiv | Bmod | Beq | Bneq | Blt | Ble | Bgt | Bge ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
@@ -151,7 +145,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movq !%rdx !%rdi
         ),
         data_code1 ++ data_code2, `int
-      | Beq, `int, `int ->
+      | Beq, `int, `int | Beq, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -159,7 +153,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Bneq, `int, `int ->
+      | Bneq, `int, `int | Bneq, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -167,7 +161,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Blt, `int, `int ->
+      | Blt, `int, `int | Blt, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -175,7 +169,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Ble, `int, `int ->
+      | Ble, `int, `int | Ble, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -183,7 +177,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Bgt, `int, `int ->
+      | Bgt, `int, `int | Bgt, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -191,7 +185,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Bge, `int, `int ->
+      | Bge, `int, `int | Bge, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++

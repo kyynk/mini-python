@@ -26,6 +26,17 @@ let func_print_string (env:env_t): X86_64.text =
   Utils.asm_print_string func_print_string_start func_print_string_end ++
   ret
 
+
+let func_print_list_save_reg : X86_64.text =
+  pushq !%rsi ++
+  pushq !%rdi ++
+  pushq !%rcx
+
+let func_print_list_restore_reg : X86_64.text =
+  popq rcx ++
+  popq rdi ++
+  popq rsi
+
 let func_print_list (env:env_t): X86_64.text =
   let list_start = unique_label env "list_start" in
   let list_loop_start = unique_label env "list_loop_start" in
@@ -55,27 +66,19 @@ let func_print_list (env:env_t): X86_64.text =
   movq (ind ~ofs:(byte) rdi) !%rcx ++
   addq (imm (2 * byte)) !%rdi ++
   movq !%rdi !%rsi ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   put_character lbrac ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
 
   label list_loop_start ++
   testq !%rcx !%rcx ++
   jz list_loop_end ++
   cmpq !%rdi !%rsi ++
   je list_loop_first_time ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   put_character comma ++
   put_character space ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
 
   label list_loop_first_time ++
   movq (ind rdi) !%rdx ++
@@ -90,9 +93,7 @@ let func_print_list (env:env_t): X86_64.text =
   je string_case ++
   cmpq (imm 4) !%rdx ++
   jne "runtime_error" ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   movq (ind ~ofs:(-byte) rbp) !%rax ++
   incq !%rax ++
   movq !%rax (ind ~ofs:(-byte) rbp) ++
@@ -102,13 +103,9 @@ let func_print_list (env:env_t): X86_64.text =
 
   (* none *)
   label none_case ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   Utils.asm_print_none ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
   jmp list_loop_start ++
@@ -116,14 +113,10 @@ let func_print_list (env:env_t): X86_64.text =
 
   (* bool *)
   label bool_case ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   movq (ind rdi) !%rdi ++
   Utils.asm_print_bool bool_label_false bool_label_end ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
   jmp list_loop_start ++
@@ -131,14 +124,10 @@ let func_print_list (env:env_t): X86_64.text =
 
   (* int *)
   label int_case ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   movq (ind rdi) !%rdi ++
   Utils.asm_print_int ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
   jmp list_loop_start ++
@@ -146,34 +135,24 @@ let func_print_list (env:env_t): X86_64.text =
 
   (* string *)
   label string_case ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   movq (ind rdi) !%rdi ++
   Utils.asm_print_string string_loop string_loop_end ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
   jmp list_loop_start ++
 
   label list_loop_end ++
-  pushq !%rsi ++
-  pushq !%rdi ++
-  pushq !%rcx ++
+  func_print_list_save_reg ++
   put_character rbrac ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
   movq (ind ~ofs:(-byte) rbp) !%rax ++
   testq !%rax !%rax ++
   jz list_end ++
   decq !%rax ++
   movq !%rax (ind ~ofs:(-byte) rbp) ++
-  popq rcx ++
-  popq rdi ++
-  popq rsi ++
+  func_print_list_restore_reg ++
   decq !%rcx ++
   addq (imm byte) !%rdi ++
   jmp list_loop_start ++
