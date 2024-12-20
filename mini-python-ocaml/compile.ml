@@ -344,7 +344,18 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       subq (imm (env.stack_offset)) !%rsp
       , data_code
   | TSfor (var, expr, body) ->
-    failwith "Unsupported Sfor"
+    (* 編譯 expr 並檢查它的類型 *)
+    let text_code_expr, data_code_expr, expr_type = compile_expr env expr in
+    begin
+      match expr_type with
+      | `int | `none | `bool->
+        (* 如果 expr 是 int，則丟出運行時錯誤 *)
+        call "runtime_error", nop
+      | `list | `string ->
+        (* 支援的可迭代類型 *)
+        (* 在這裡處理迴圈邏輯，或繼續編譯 *)
+        failwith "Handle supported iterable types here"
+    end;
   | TSeval expr ->
     failwith "Unsupported TSeval"
   | TSset (e1, e2, e3) ->
