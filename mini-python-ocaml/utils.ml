@@ -4,11 +4,6 @@ open Ast
 open Environment
 
 let byte = 8
-let comma = 44
-let space = 32
-let lbrac = 91
-let rbrac = 93
-let newline = 10
 
 let put_character (n:int) : X86_64.text =
   movq (imm n) !%rdi ++
@@ -53,15 +48,12 @@ let asm_print_int : X86_64.text =
 
 let asm_print_string (loop_start:label) (loop_end:label): X86_64.text =
   movq !%rdi !%rax ++
-  label loop_start ++
   movq (ind ~ofs:(byte) rax) !%rdi ++
   testq !%rdi !%rdi ++
   jz loop_end ++
-  pushq !%rax ++
-  call "putchar_wrapper" ++
-  popq rax ++
-  addq (imm byte) !%rax ++
-  jmp loop_start ++
+  movq (ind ~ofs:(2 * byte) rax) !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
   label loop_end
 
 
@@ -81,22 +73,11 @@ let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text)
   movq (reg rdi) (ind ~ofs:(byte) rax)
 
 
-let c_standard_function_wrapper (l:label) (fn_name:string): X86_64.text =
-  label l ++
+let c_standard_function_wrapper (fn_name:string): X86_64.text =
+  label (fn_name ^ "_wrapper") ++ 
   pushq (reg rbp) ++
   movq (reg rsp) (reg rbp) ++
   andq (imm (-16)) (reg rsp) ++
-  call fn_name ++
-  movq (reg rbp) (reg rsp) ++
-  popq rbp ++
-  ret
-
-let printf_wrapper (l:label) (fn_name:string): X86_64.text =
-  label l ++
-  pushq (reg rbp) ++
-  movq (reg rsp) (reg rbp) ++
-  andq (imm (-16)) (reg rsp) ++
-  xorq !%rax !%rax ++
   call fn_name ++
   movq (reg rbp) (reg rsp) ++
   popq rbp ++

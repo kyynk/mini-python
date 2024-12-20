@@ -30,17 +30,15 @@ let compile_const (env: env_t) (c: Ast.constant) : X86_64.text * X86_64.data * t
     , nop, `int
   | Cstring s ->
     let len = String.length s in
-    let (text_code, _) = String.fold_left (fun (acc, counter) i ->
-      let counter = counter + byte in
-      acc ++ movq (imm (Char.code i)) (ind ~ofs:(counter) rax), counter
-    ) (nop, byte) s in
-    movq (imm ((len + 3) * byte)) !%rdi ++
+    let string_label = unique_label env "string" in
+    movq (imm (3 * byte)) !%rdi ++
     call "malloc_wrapper" ++
     movq (imm 3) (ind rax) ++
     movq (imm len) (ind ~ofs:(byte) rax) ++
-    text_code ++
-    movq (imm 0) (ind ~ofs:((len + 2) * byte) rax)
-    ,nop , `string
+    leaq (lab string_label) rdi ++
+    movq !%rdi (ind ~ofs:(2 * byte) rax)
+    , label string_label ++ string s, `string len
+
 
 let compile_var (env: env_t) (v: Ast.var) : X86_64.text * X86_64.data * ty =
   let var, ofs, var_type = StringMap.find v.v_name env.vars in
@@ -84,36 +82,33 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | Badd, `int, `int ->
         arith_asm text_code1 text_code2 (addq !%rsi !%rdi),
         data_code1 ++ data_code2, `int
-      | Badd, `int, `string | Badd, `string, `int | Badd, `bool, `int | Badd, `int, `bool ->
-        print_endline "Badd int string";
-        text_code1 ++ text_code2 ++ call "runtime_error"
-        , nop, `int
-      | Badd, `string, `string ->
-        print_endline "Badd string string";
-        let concat_code = 
-          movq (reg rax) (reg rdi) ++ 
-          call "strlen" ++            
-          movq (reg rax) (reg rbx) ++ 
-    
-          movq (reg rsi) (reg rdi) ++ 
-          call "strlen" ++              
-          addq (reg rbx) (reg rax) ++   
-          addq (imm 1) (reg rax) ++     
-    
-          movq (reg rax) (reg rdi) ++
-          call "malloc_wrapper" ++
-    
-          movq (reg rsi) (reg rdi) ++
-          movq (reg rax) (reg rsi) ++
-          call "strcpy_wrapper" ++
-    
-          movq (reg rsi) (reg rdi) ++   
-          movq (reg rsi) (reg rsi) ++   
-          call "strcat_wrapper" ++
-          movq (reg rdi) (ind rax)      
-        in
-        concat_code, nop, `string
-         
+      | Badd, `string l1, `string l2 ->
+        let new_label = unique_label env "string" in
+        text_code1 ++
+        movq (ind ~ofs:(byte) rax) !%rdx ++
+        movq (ind ~ofs:(2 * byte) rax) !%rsi ++
+        leaq (lab new_label) rdi ++
+        pushq !%rdx ++
+        call "strcpy_wrapper" ++
+        text_code2 ++
+        popq rdx ++
+        addq (ind ~ofs:(byte) rax) !%rdx ++
+        movq (ind ~ofs:(2 * byte) rax) !%rsi ++
+        pushq !%rdx ++
+        call "strcat_wrapper" ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        movq (imm (3 * byte)) !%rdi ++
+        call "malloc_wrapper" ++
+        popq rdi ++
+        popq rdx ++
+        movq (imm 3) (ind rax) ++
+        movq !%rdx (ind ~ofs:(byte) rax) ++
+        movq !%rdi (ind ~ofs:(2 * byte) rax),
+        data_code1 ++ data_code2 ++
+        label new_label ++ space (l1+l2+1), `string (l1 + l2)
+      (* | Badd, `list, `list -> *)
+        
       | Bsub, `int, `int ->
         arith_asm text_code1 text_code2 (subq !%rsi !%rdi),
         data_code1 ++ data_code2, `int
@@ -189,7 +184,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         ),
         data_code1 ++ data_code2, `bool
       | _ ->
-        failwith "Unsupported binop"
+        call "runtime_error", nop, `none
       end
     end
   | TEunop (op, e) ->
@@ -248,21 +243,21 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       failwith "Unsupported function call"
   | TElist l ->
     let len = List.length l in
-    List.fold_left (fun (acc, counter) i ->
-      let text_code, _, _ = compile_expr env i in
-      acc ++
+    List.fold_left (fun (text_acc, data_acc, counter) i ->
+      let text_expr, data_expr, _ = compile_expr env i in
+      text_acc ++
       pushq !%rax ++ (* save heap address*)
-      text_code ++
+      text_expr ++
       movq !%rax !%rsi ++
       popq rax ++
       movq !%rsi (ind ~ofs:(counter) rax),
-      counter + byte
-    ) (nop, 2 * byte) l |> fun (text_code, _) ->
+      data_acc ++ data_expr, counter + byte
+    ) (nop, nop, 2 * byte) l |> fun (text_code, data_code, _) ->
     movq (imm ((len + 2) * byte)) !%rdi ++
     call "malloc_wrapper" ++
     movq (imm 4) (ind rax) ++ (* type *)
     movq (imm len) (ind ~ofs:(byte) rax) ++ (* length *)
-    text_code, nop, `list
+    text_code, data_code, `list
   | TErange e ->
     failwith "Unsupported TErange"
   | TEget (e1, e2) ->
@@ -300,31 +295,31 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     | `none ->
       text_code ++
       call "print_none" ++
-      put_character newline,
+      put_character (Char.code '\n'),
       data_code
     | `bool ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_bool" ++
-      put_character newline,
+      put_character (Char.code '\n'),
       data_code
     | `int ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_int" ++
-      put_character newline,
+      put_character (Char.code '\n'),
       data_code
-    | `string ->
+    | `string _ ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_string" ++
-      put_character newline,
+      put_character (Char.code '\n'),
       data_code
     | `list ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_list" ++
-      put_character newline, 
+      put_character (Char.code '\n'),
       data_code
     end
   | TSblock stmts ->
@@ -376,20 +371,19 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   ) (nop, nop) p in
   { 
     text = 
-      c_standard_function_wrapper "malloc_wrapper" "malloc" ++
-      c_standard_function_wrapper "putchar_wrapper" "putchar" ++
-      c_standard_function_wrapper "printf_wrapper" "printf" ++
-      c_standard_function_wrapper "strcmp_wrapper" "strcmp" ++
-      c_standard_function_wrapper "strcpy_wrapper" "strcpy" ++
-      c_standard_function_wrapper "strcat_wrapper" "strcat" ++
+      c_standard_function_wrapper "malloc" ++
+      c_standard_function_wrapper "putchar" ++
+      c_standard_function_wrapper "printf" ++
+      c_standard_function_wrapper "strcmp" ++
+      c_standard_function_wrapper "strcpy" ++
+      c_standard_function_wrapper "strcat" ++
       func_print_none ++
       func_print_bool env ++
       func_print_int ++
       func_print_string env ++
       func_print_list env ++
       runtime_error_text ++
-      globl "main" ++ text_code ++
-      label "aaa";
+      globl "main" ++ text_code;    
     data = 
       data_code ++
       runtime_error_data ++

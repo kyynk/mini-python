@@ -67,7 +67,7 @@ let func_print_list (env:env_t): X86_64.text =
   addq (imm (2 * byte)) !%rdi ++
   movq !%rdi !%rsi ++
   func_print_list_save_reg ++
-  put_character lbrac ++
+  put_character (Char.code '[') ++
   func_print_list_restore_reg ++
 
   label list_loop_start ++
@@ -76,8 +76,8 @@ let func_print_list (env:env_t): X86_64.text =
   cmpq !%rdi !%rsi ++
   je list_loop_first_time ++
   func_print_list_save_reg ++
-  put_character comma ++
-  put_character space ++
+  put_character (Char.code ',') ++
+  put_character (Char.code ' ') ++
   func_print_list_restore_reg ++
 
   label list_loop_first_time ++
@@ -145,7 +145,7 @@ let func_print_list (env:env_t): X86_64.text =
 
   label list_loop_end ++
   func_print_list_save_reg ++
-  put_character rbrac ++
+  put_character (Char.code ']') ++
   func_print_list_restore_reg ++
   movq (ind ~ofs:(-byte) rbp) !%rax ++
   testq !%rax !%rax ++
@@ -162,3 +162,4 @@ let func_print_list (env:env_t): X86_64.text =
   movq !%rbp !%rsp ++
   popq rbp ++
   ret
+
