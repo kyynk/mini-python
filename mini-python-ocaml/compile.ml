@@ -235,12 +235,11 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | [e] ->
         let _, _, arg_type = compile_expr env e in
         begin match arg_type with
-        | `string | `list -> (* 正確的類型 *)
-          (* len 的實現邏輯 *)
+        | `string | `list -> 
           failwith "Implement len logic here"
         | `int ->
           call "runtime_error", nop, `int
-        | _ -> (* 錯誤類型 *)
+        | _ -> 
           failwith "TypeError: object of type is not iterable"
         end
       | _ ->
