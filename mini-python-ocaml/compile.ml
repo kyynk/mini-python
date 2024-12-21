@@ -91,31 +91,26 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | Badd, `string, `string ->
         print_endline "Badd string string";
         let concat_code = 
-          (* 計算第一個字符串長度 *)
-          movq (reg rax) (reg rdi) ++    (* 第一個字符串地址 -> rdi *)
-          call "strlen" ++              (* 計算第一個字符串長度 *)
-          movq (reg rax) (reg rbx) ++   (* 保存第一個字符串長度到 rbx *)
+          movq (reg rax) (reg rdi) ++ 
+          call "strlen" ++            
+          movq (reg rax) (reg rbx) ++ 
     
-          (* 計算第二個字符串長度 *)
-          movq (reg rsi) (reg rdi) ++   (* 第二個字符串地址 -> rdi *)
-          call "strlen" ++              (* 計算第二個字符串長度 *)
-          addq (reg rbx) (reg rax) ++   (* 總長度 = len1 + len2 *)
-          addq (imm 1) (reg rax) ++     (* 包括終止符 \0 *)
+          movq (reg rsi) (reg rdi) ++ 
+          call "strlen" ++              
+          addq (reg rbx) (reg rax) ++   
+          addq (imm 1) (reg rax) ++     
     
-          (* 分配內存 *)
           movq (reg rax) (reg rdi) ++
           call "malloc_wrapper" ++
     
-          (* 複製第一個字符串 *)
-          movq (reg rsi) (reg rdi) ++   (* 第一個字符串地址 -> rdi *)
-          movq (reg rax) (reg rsi) ++   (* 新分配內存地址 -> rsi *)
+          movq (reg rsi) (reg rdi) ++
+          movq (reg rax) (reg rsi) ++
           call "strcpy_wrapper" ++
     
-          (* 拼接第二個字符串 *)
-          movq (reg rsi) (reg rdi) ++   (* 新分配內存地址 -> rdi *)
-          movq (reg rsi) (reg rsi) ++   (* 第二個字符串地址 -> rsi *)
+          movq (reg rsi) (reg rdi) ++   
+          movq (reg rsi) (reg rsi) ++   
           call "strcat_wrapper" ++
-          movq (reg rdi) (ind rax)      (* 保存結果地址 *)
+          movq (reg rdi) (ind rax)      
         in
         concat_code, nop, `string
          
@@ -344,16 +339,12 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       subq (imm (env.stack_offset)) !%rsp
       , data_code
   | TSfor (var, expr, body) ->
-    (* 編譯 expr 並檢查它的類型 *)
     let text_code_expr, data_code_expr, expr_type = compile_expr env expr in
     begin
       match expr_type with
       | `int | `none | `bool->
-        (* 如果 expr 是 int，則丟出運行時錯誤 *)
         call "runtime_error", nop
       | `list | `string ->
-        (* 支援的可迭代類型 *)
-        (* 在這裡處理迴圈邏輯，或繼續編譯 *)
         failwith "Handle supported iterable types here"
     end;
   | TSeval expr ->
