@@ -24,4 +24,4 @@ h = [-1, 2, ["asd", 4]]
 print(h)
 i = [1,[2,["hrt",[True,[-5]]]]]
 print(i)
-print(1 < 2 and len(1))
+# print(1 < 2 and len(1))

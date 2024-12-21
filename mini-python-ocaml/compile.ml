@@ -301,31 +301,31 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
     | `none ->
       text_code ++
       call "print_none" ++
-      put_character (Char.code '\n'),
+      put_character '\n',
       data_code
     | `bool ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_bool" ++
-      put_character (Char.code '\n'),
+      put_character '\n',
       data_code
     | `int ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_int" ++
-      put_character (Char.code '\n'),
+      put_character '\n',
       data_code
     | `string _ ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_string" ++
-      put_character (Char.code '\n'),
+      put_character '\n',
       data_code
     | `list _ ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_list" ++
-      put_character (Char.code '\n'),
+      put_character '\n',
       data_code
     end
   | TSblock stmts ->

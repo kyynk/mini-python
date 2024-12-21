@@ -5,8 +5,8 @@ open Environment
 
 let byte = 8
 
-let put_character (n:int) : X86_64.text =
-  movq (imm n) !%rdi ++
+let put_character (c:char): X86_64.text =
+  movq (imm (Char.code c)) !%rdi ++
   call "putchar_wrapper"
 
 

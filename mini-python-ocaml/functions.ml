@@ -60,9 +60,15 @@ let func_print_string (env:env_t): X86_64.text =
   movq (ind ~ofs:(byte) rax) !%rdi ++
   testq !%rdi !%rdi ++
   jz label_end ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  put_character '"' ++
+  popq rax ++
+  popq rdi ++
   movq (ind ~ofs:(2 * byte) rax) !%rdi ++
   xorq !%rax !%rax ++
   call "printf_wrapper" ++
+  put_character '"' ++
   label label_end ++
   ret
 
@@ -104,7 +110,7 @@ let func_print_list (env:env_t): X86_64.text =
   movq !%rdi !%rsi ++
 
   func_print_list_save_reg ++
-  put_character (Char.code '[') ++
+  put_character '[' ++
   func_print_list_restore_reg ++
 
   label list_loop_start ++
@@ -114,8 +120,8 @@ let func_print_list (env:env_t): X86_64.text =
   je list_loop_first_time ++
   
   func_print_list_save_reg ++
-  put_character (Char.code ',') ++
-  put_character (Char.code ' ') ++
+  put_character ',' ++
+  put_character ' ' ++
   func_print_list_restore_reg ++
 
   label list_loop_first_time ++
@@ -181,7 +187,7 @@ let func_print_list (env:env_t): X86_64.text =
 
   label list_loop_end ++
   func_print_list_save_reg ++
-  put_character (Char.code ']') ++
+  put_character ']' ++
   func_print_list_restore_reg ++
   movq (ind ~ofs:(-byte) rbp) !%rax ++
   testq !%rax !%rax ++
@@ -324,10 +330,10 @@ let func_copy_value env : X86_64.text =
   ret
 
 let func_list_concat (env:env_t): X86_64.text =
+  let next_list = unique_label env "next_list" in
+  let first_loop = unique_label env "first_loop" in
+  let second_loop = unique_label env "second_loop" in
   let func_list_concat_end = unique_label env "func_list_concat_end" in
-  let func_list_concat_loop = unique_label env "func_list_concat_loop" in
-  let func_list_concat_loop_second_prep = unique_label env "func_list_concat_loop_second_prep" in
-  let func_list_concat_loop_second = unique_label env "func_list_concat_loop_second" in
   label "concat_list" ++
   pushq !%rbp ++
   movq !%rsp !%rbp ++
@@ -369,9 +375,9 @@ let func_list_concat (env:env_t): X86_64.text =
   rax : pointer to copied list with tag and length copied
   rcx : length of list to be copied
    *)
-  label func_list_concat_loop ++
+  label first_loop ++
   testq !%rcx !%rcx ++
-  jz func_list_concat_loop_second_prep ++
+  jz next_list ++
   copy_value_store_reg ++
   movq (ind rdi) !%rdi ++
   call "copy_value" ++
@@ -381,13 +387,13 @@ let func_list_concat (env:env_t): X86_64.text =
   decq !%rcx ++
   addq (imm byte) !%rdx ++
   addq (imm byte) !%rdi ++
-  jmp func_list_concat_loop ++
+  jmp first_loop ++
 
 
-  label func_list_concat_loop_second_prep ++
+  label next_list ++
   movq !%r9 !%rcx ++
   popq rdi ++
-  label func_list_concat_loop_second ++
+  label second_loop ++
   testq !%rcx !%rcx ++
   jz func_list_concat_end ++
   copy_value_store_reg ++
@@ -399,7 +405,7 @@ let func_list_concat (env:env_t): X86_64.text =
   decq !%rcx ++
   addq (imm byte) !%rdx ++
   addq (imm byte) !%rdi ++
-  jmp func_list_concat_loop_second ++
+  jmp second_loop ++
 
   label func_list_concat_end ++
   leave ++
