@@ -107,8 +107,14 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
         movq !%rdi (ind ~ofs:(2 * byte) rax),
         data_code1 ++ data_code2 ++
         label new_label ++ space (l1+l2+1), `string (l1 + l2)
-      (* | Badd, `list, `list -> *)
-        
+      | Badd, `list l1, `list l2 ->
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        movq !%rax !%rsi ++
+        popq rdi ++
+        call "concat_list", data_code1 ++ data_code2, `list (l1 + l2)
       | Bsub, `int, `int ->
         arith_asm text_code1 text_code2 (subq !%rsi !%rdi),
         data_code1 ++ data_code2, `int
@@ -257,7 +263,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
     call "malloc_wrapper" ++
     movq (imm 4) (ind rax) ++ (* type *)
     movq (imm len) (ind ~ofs:(byte) rax) ++ (* length *)
-    text_code, data_code, `list
+    text_code, data_code, `list len
   | TErange e ->
     failwith "Unsupported TErange"
   | TEget (e1, e2) ->
@@ -315,7 +321,7 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       call "print_string" ++
       put_character (Char.code '\n'),
       data_code
-    | `list ->
+    | `list _ ->
       text_code ++
       movq !%rax !%rdi ++
       call "print_list" ++
@@ -377,22 +383,21 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       c_standard_function_wrapper "strcmp" ++
       c_standard_function_wrapper "strcpy" ++
       c_standard_function_wrapper "strcat" ++
-      func_print_none ++
-      func_print_bool env ++
-      func_print_int ++
+      func_print_none_text ++
+      func_print_bool_text env ++
+      func_print_int_text ++
       func_print_string env ++
       func_print_list env ++
       runtime_error_text ++
+      func_copy_two_byte ++
+      func_copy_string ++
+      func_copy_value env ++
+      func_list_concat env ++
       globl "main" ++ text_code;    
     data = 
       data_code ++
-      runtime_error_data ++
-      label "print_inta" ++
-      string "%d" ++
-      label "true_string" ++
-      string "True" ++
-      label "false_string" ++
-	    string "False" ++
-      label "none_string" ++
-      string "None";
+      func_print_none_data ++
+      func_print_bool_data ++
+      func_print_int_data ++
+      runtime_error_data;
   }

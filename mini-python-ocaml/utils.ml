@@ -20,43 +20,6 @@ let unique_label (env: env_t) (prefix: string) : string =
   Printf.sprintf "%s%d" prefix counter
 
 
-let asm_print_none : X86_64.text = 
-  leaq (lab "none_string") rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper"
-
-
-let asm_print_bool (label_false:label) (label_end:label): X86_64.text =
-  movq (ind ~ofs:(byte) rdi) !%rsi ++
-  cmpq (imm 0) !%rsi ++
-  je label_false ++
-  leaq (lab "true_string") rdi ++
-  jmp label_end ++
-  label label_false ++
-  leaq (lab "false_string") rdi ++
-  label label_end ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper"
-
-
-let asm_print_int : X86_64.text =
-  movq (ind ~ofs:(byte) rdi) !%rsi ++
-  leaq (lab "print_inta") rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper"
-
-
-let asm_print_string (loop_start:label) (loop_end:label): X86_64.text =
-  movq !%rdi !%rax ++
-  movq (ind ~ofs:(byte) rax) !%rdi ++
-  testq !%rdi !%rdi ++
-  jz loop_end ++
-  movq (ind ~ofs:(2 * byte) rax) !%rdi ++
-  xorq !%rax !%rax ++
-  call "printf_wrapper" ++
-  label loop_end
-
-
 let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text) : X86_64.text =
   code1 ++
   movq (ind ~ofs:(byte) rax) (reg rdi) ++

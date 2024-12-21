@@ -10,8 +10,11 @@ d = "hello"
 print(d)
 dd = " world"
 print(d+dd)
-e = [1, -2, 3]
+e = [1,[2,["hrt",[True,[-5]]]]]
 print(e)
+
+ee = e+e
+print(ee)
 f = None
 print(f)
 g_arg = True
