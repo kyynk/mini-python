@@ -56,33 +56,27 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
   | TEbinop (op, e1, e2) ->
     begin match op with
     | Band ->
-      let text_code1, data_code1, expr_type1 = compile_expr env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      begin
-      if expr_type1 <> `bool || expr_type2 <> `bool then failwith "compilation error";
-        let l = unique_label env "cond_false" in
-        text_code1 ++
-        movq (ind ~ofs:(byte) rax) !%rdi ++
-        cmpq (imm 0) !%rdi ++
-        je l ++
-        text_code2 ++
-        label l
-        , data_code1 ++ data_code2, `bool  
-      end
+      let text_code1, data_code1, _ = compile_expr env e1 in
+      let text_code2, data_code2, _ = compile_expr env e2 in
+      let l = unique_label env "cond_false" in
+      text_code1 ++
+      movq (ind ~ofs:(byte) rax) !%rdi ++
+      cmpq (imm 0) !%rdi ++
+      je l ++
+      text_code2 ++
+      label l, 
+      data_code1 ++ data_code2, `bool  
     | Bor ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
-      begin
-      if expr_type1 <> `bool || expr_type2 <> `bool then failwith "compilation error";
-        let l = unique_label env "cond_true" in
-        text_code1 ++
-        movq (ind ~ofs:(byte) rax) !%rdi ++
-        cmpq (imm 0) !%rdi ++
-        jne l ++
-        text_code2 ++
-        label l
-        , data_code1 ++ data_code2, `bool
-      end
+      let l = unique_label env "cond_true" in
+      text_code1 ++
+      movq (ind ~ofs:(byte) rax) !%rdi ++
+      cmpq (imm 0) !%rdi ++
+      jne l ++
+      text_code2 ++
+      label l,
+      data_code1 ++ data_code2, `bool
     | Badd | Bsub | Bmul | Bdiv | Bmod | Beq | Bneq | Blt | Ble | Bgt | Bge ->
       let text_code1, data_code1, expr_type1 = compile_expr env e1 in
       let text_code2, data_code2, expr_type2 = compile_expr env e2 in
@@ -90,10 +84,36 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | Badd, `int, `int ->
         arith_asm text_code1 text_code2 (addq !%rsi !%rdi),
         data_code1 ++ data_code2, `int
-      | Badd, `int, `string ->
+      | Badd, `int, `string | Badd, `string, `int | Badd, `bool, `int | Badd, `int, `bool ->
         print_endline "Badd int string";
         text_code1 ++ text_code2 ++ call "runtime_error"
         , nop, `int
+      | Badd, `string, `string ->
+        print_endline "Badd string string";
+        let concat_code = 
+          movq (reg rax) (reg rdi) ++ 
+          call "strlen" ++            
+          movq (reg rax) (reg rbx) ++ 
+    
+          movq (reg rsi) (reg rdi) ++ 
+          call "strlen" ++              
+          addq (reg rbx) (reg rax) ++   
+          addq (imm 1) (reg rax) ++     
+    
+          movq (reg rax) (reg rdi) ++
+          call "malloc_wrapper" ++
+    
+          movq (reg rsi) (reg rdi) ++
+          movq (reg rax) (reg rsi) ++
+          call "strcpy_wrapper" ++
+    
+          movq (reg rsi) (reg rdi) ++   
+          movq (reg rsi) (reg rsi) ++   
+          call "strcat_wrapper" ++
+          movq (reg rdi) (ind rax)      
+        in
+        concat_code, nop, `string
+         
       | Bsub, `int, `int ->
         arith_asm text_code1 text_code2 (subq !%rsi !%rdi),
         data_code1 ++ data_code2, `int
@@ -120,7 +140,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movq !%rdx !%rdi
         ),
         data_code1 ++ data_code2, `int
-      | Beq, `int, `int ->
+      | Beq, `int, `int | Beq, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -128,7 +148,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Bneq, `int, `int ->
+      | Bneq, `int, `int | Bneq, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -136,7 +156,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Blt, `int, `int ->
+      | Blt, `int, `int | Blt, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -144,7 +164,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Ble, `int, `int ->
+      | Ble, `int, `int | Ble, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -152,7 +172,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Bgt, `int, `int ->
+      | Bgt, `int, `int | Bgt, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -160,7 +180,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
           movzbq !%dil rdi
         ),
         data_code1 ++ data_code2, `bool
-      | Bge, `int, `int ->
+      | Bge, `int, `int | Bge, `bool, `bool ->
         arith_asm text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
@@ -210,7 +230,22 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       end
     end
   | TEcall (fn, args) ->
-    failwith "Unsupported TEcall"
+    if fn.fn_name = "len" then
+      match args with
+      | [e] ->
+        let _, _, arg_type = compile_expr env e in
+        begin match arg_type with
+        | `string | `list -> 
+          failwith "Implement len logic here"
+        | `int ->
+          call "runtime_error", nop, `int
+        | _ -> 
+          failwith "TypeError: object of type is not iterable"
+        end
+      | _ ->
+        failwith "TypeError: len() takes exactly one argument"
+    else
+      failwith "Unsupported function call"
   | TElist l ->
     let len = List.length l in
     List.fold_left (fun (acc, counter) i ->
@@ -303,7 +338,14 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       subq (imm (env.stack_offset)) !%rsp
       , data_code
   | TSfor (var, expr, body) ->
-    failwith "Unsupported Sfor"
+    let text_code_expr, data_code_expr, expr_type = compile_expr env expr in
+    begin
+      match expr_type with
+      | `int | `none | `bool->
+        call "runtime_error", nop
+      | `list | `string ->
+        failwith "Handle supported iterable types here"
+    end;
   | TSeval expr ->
     failwith "Unsupported TSeval"
   | TSset (e1, e2, e3) ->

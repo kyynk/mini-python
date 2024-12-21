@@ -67,17 +67,18 @@ let asm_print_string (loop_start:label) (loop_end:label): X86_64.text =
 
 let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text) : X86_64.text =
   code1 ++
-  movq (ind rax) (reg rdi) ++
+  movq (ind ~ofs:(byte) rax) (reg rdi) ++
   pushq (reg rdi) ++
   code2 ++
   popq rdi ++
-  movq (ind rax) (reg rsi) ++
+  movq (ind ~ofs:(byte) rax) (reg rsi) ++
   instructions ++
   pushq (reg rdi) ++
   movq (imm byte) (reg rdi) ++
   call "malloc_wrapper" ++
   popq rdi ++
-  movq (reg rdi) (ind rax)
+  movq (imm 2) (ind rax) ++
+  movq (reg rdi) (ind ~ofs:(byte) rax)
 
 
 let c_standard_function_wrapper (l:label) (fn_name:string): X86_64.text =
@@ -90,6 +91,16 @@ let c_standard_function_wrapper (l:label) (fn_name:string): X86_64.text =
   popq rbp ++
   ret
 
+let printf_wrapper (l:label) (fn_name:string): X86_64.text =
+  label l ++
+  pushq (reg rbp) ++
+  movq (reg rsp) (reg rbp) ++
+  andq (imm (-16)) (reg rsp) ++
+  xorq !%rax !%rax ++
+  call fn_name ++
+  movq (reg rbp) (reg rsp) ++
+  popq rbp ++
+  ret
 
 let emit_runtime_error (env:env_t): X86_64.text * X86_64.data =
   let error_text_label = "runtime_error" in
