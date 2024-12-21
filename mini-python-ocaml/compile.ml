@@ -236,7 +236,7 @@ let rec compile_expr (env: env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data 
       | [e] ->
         let _, _, arg_type = compile_expr env e in
         begin match arg_type with
-        | `string | `list -> 
+        | `string _ | `list _ -> 
           failwith "Implement len logic here"
         | `int ->
           call "runtime_error", nop, `int
@@ -344,7 +344,7 @@ let rec compile_stmt (env: env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data 
       match expr_type with
       | `int | `none | `bool->
         call "runtime_error", nop
-      | `list | `string ->
+      | `list _ | `string _ ->
         failwith "Handle supported iterable types here"
     end;
   | TSeval expr ->
