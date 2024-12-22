@@ -399,5 +399,6 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       func_print_none_data ++
       func_print_bool_data ++
       func_print_int_data ++
-      runtime_error_data;
+      runtime_error_data ++
+      inline "\t.section .note.GNU-stack,\"\",@progbits\n";
   }
