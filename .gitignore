@@ -35,3 +35,7 @@ minipython.exe
 out
 
 *.s
+*.gdb_history
+*peda-session-*
+mini-python-ocaml/a.out
+mini-python-ocaml/tests-mini-python/a.out

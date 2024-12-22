@@ -2,7 +2,13 @@ open Ast
 
 module StringMap = Map.Make(String)
 
-type ty = [ `none | `int | `bool | `string | `list ]
+type ty = [
+  | `none 
+  | `int 
+  | `bool 
+  | `string of int
+  | `list of int
+]
 
 type env_t = {
   mutable vars: (var * int * ty) StringMap.t;
