@@ -76,12 +76,117 @@ let func_print_string (env:env_t): X86_64.text =
 let func_print_list_save_reg : X86_64.text =
   pushq !%rsi ++
   pushq !%rdi ++
-  pushq !%rcx
+  pushq !%rcx ++
+  pushq !%r8
 
 let func_print_list_restore_reg : X86_64.text =
+  popq r8 ++
   popq rcx ++
   popq rdi ++
   popq rsi
+  
+let func_print_value (env:env_t): X86_64.text =
+  let print_none = unique_label env "print_none" in
+  let print_bool = unique_label env "print_bool" in
+  let print_bool_false = unique_label env "print_bool_false" in
+  let print_bool_end = unique_label env "print_bool_end" in
+  let print_int = unique_label env "print_int" in
+  let print_string = unique_label env "print_string" in
+  let print_string_end = unique_label env "print_string_end" in
+  let print_list = unique_label env "print_list" in
+  let print_list_end = unique_label env "print_list_end" in
+  let print_list_first_time = unique_label env "print_list_first_time" in
+  let print_value_end = unique_label env "print_value_end" in
+  label "print_value" ++
+  pushq !%rbp ++
+  movq !%rsp !%rbp ++
+  movq (ind rdi) !%r10 ++
+  cmpq (imm 0) !%r10 ++
+  je print_none ++
+  cmpq (imm 1) !%r10 ++
+  je print_bool ++
+  cmpq (imm 2) !%r10 ++
+  je print_int ++
+  cmpq (imm 3) !%r10 ++
+  je print_string ++
+  cmpq (imm 4) !%r10 ++
+  jne "runtime_error" ++
+  movq (ind ~ofs:(byte) rdi) !%rcx ++
+  addq (imm (2 * byte)) !%rdi ++
+  movq !%rdi !%rsi ++
+  func_print_list_save_reg ++
+  put_character '[' ++
+  func_print_list_restore_reg ++
+  label print_list ++
+  testq !%rcx !%rcx ++
+  jz print_list_end ++
+  cmpq !%rdi !%rsi ++
+  je print_list_first_time ++
+  func_print_list_save_reg ++
+  put_character ',' ++
+  put_character ' ' ++
+  func_print_list_restore_reg ++
+  label print_list_first_time ++
+  func_print_list_save_reg ++
+  movq (ind rdi) !%rdi ++
+  call "print_value" ++
+  func_print_list_restore_reg ++
+  decq !%rcx ++
+  addq (imm byte) !%rdi ++
+  jmp print_list ++
+  
+  label print_none ++
+  label "print_none" ++
+  leaq (lab "none_string") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  jmp print_value_end ++
+
+  label print_bool ++
+  movq (ind ~ofs:(byte) rdi) !%rsi ++
+  cmpq (imm 0) !%rsi ++
+  je print_bool_false ++
+  leaq (lab "true_string") rdi ++
+  jmp print_bool_end ++
+  label print_bool_false ++
+  leaq (lab "false_string") rdi ++
+  label print_bool_end ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  jmp print_value_end ++
+
+  label print_int ++
+  func_print_list_save_reg ++
+  movq (ind ~ofs:byte rdi) !%rsi ++
+  leaq (lab "format_int") rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  func_print_list_restore_reg ++
+  jmp print_value_end ++
+
+  label print_string ++
+  movq !%rdi !%rax ++
+  movq (ind ~ofs:(byte) rax) !%rdi ++
+  testq !%rdi !%rdi ++
+  jz print_string_end ++
+  pushq !%rdi ++
+  pushq !%rax ++
+  put_character '"' ++
+  popq rax ++
+  popq rdi ++
+  movq (ind ~ofs:(2 * byte) rax) !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf_wrapper" ++
+  put_character '"' ++
+  label print_string_end ++
+  jmp print_value_end ++
+
+  label print_list_end ++
+
+  put_character ']' ++
+  label print_value_end ++
+  leave ++
+  ret
 
 let func_print_list (env:env_t): X86_64.text =
   let list_start = unique_label env "list_start" in

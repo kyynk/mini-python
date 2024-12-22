@@ -7,7 +7,8 @@ type ty = [
   | `int 
   | `bool 
   | `string of int
-  | `list of int
+  | `list of int * ty list
+  | `chaos
 ]
 
 type env_t = {
