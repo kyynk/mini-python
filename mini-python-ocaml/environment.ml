@@ -2,17 +2,9 @@ open Ast
 
 module StringMap = Map.Make(String)
 
-type ty = [
-  | `none 
-  | `int 
-  | `bool 
-  | `string of int
-  | `list of int * ty list
-  | `chaos
-]
 
 type env_t = {
-  mutable vars: (var * int * ty) StringMap.t;
+  mutable vars: (var * int) StringMap.t;
   funcs: fn StringMap.t;
   mutable stack_offset: int;
   mutable counters: int StringMap.t;

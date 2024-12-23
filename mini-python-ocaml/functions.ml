@@ -171,13 +171,13 @@ let func_print_value (env:env_t): X86_64.text =
   jz print_string_end ++
   pushq !%rdi ++
   pushq !%rax ++
-  put_character '"' ++
+  (* put_character '"' ++ *)
   popq rax ++
   popq rdi ++
   movq (ind ~ofs:(2 * byte) rax) !%rdi ++
   xorq !%rax !%rax ++
   call "printf_wrapper" ++
-  put_character '"' ++
+  (* put_character '"' ++ *)
   label print_string_end ++
   jmp print_value_end ++
 

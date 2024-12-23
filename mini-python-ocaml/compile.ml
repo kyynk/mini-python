@@ -8,7 +8,7 @@ open Functions
 
 let debug = ref false
 
-let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data * ty =
+let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.text * X86_64.data =
   match expr with
   | TEcst c ->
     begin match c with
@@ -17,19 +17,19 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       call "malloc_wrapper" ++
       movq (imm 0) (ind rax) ++
       movq (imm 0) (ind ~ofs:(byte) rax)
-      , nop, `none
+      , nop
     | Cbool b ->
       movq (imm (2 * byte)) !%rdi ++
       call "malloc_wrapper" ++
       movq (imm 1) (ind rax) ++
       movq (imm (if b then 1 else 0)) (ind ~ofs:(byte) rax)
-      , nop, `bool
+      , nop
     | Cint i ->
       movq (imm (2 * byte)) !%rdi ++
       call "malloc_wrapper" ++
       movq (imm 2) (ind rax) ++
       movq (imm64 i) (ind ~ofs:(byte) rax)
-      , nop, `int
+      , nop
     | Cstring s ->
       let len = String.length s in
       let string_label = unique_label env "string" in
@@ -39,16 +39,16 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       movq (imm len) (ind ~ofs:(byte) rax) ++
       leaq (lab string_label) rdi ++
       movq !%rdi (ind ~ofs:(2 * byte) rax)
-      , label string_label ++ string s, `string len
+      , label string_label ++ string s
     end
   | TEvar v ->
-    let var, ofs, var_type = StringMap.find v.v_name env.vars in
-    movq (ind ~ofs:(ofs+parent_env.stack_offset) rbp) !%rax, nop, var_type
+    let var, ofs = StringMap.find v.v_name env.vars in
+    movq (ind ~ofs:(ofs+parent_env.stack_offset) rbp) !%rax, nop
   | TEbinop (op, e1, e2) ->
     begin match op with
     | Band ->
-      let text_code1, data_code1, _ = compile_expr env parent_env e1 in
-      let text_code2, data_code2, _ = compile_expr env parent_env e2 in
+      let text_code1, data_code1 = compile_expr env parent_env e1 in
+      let text_code2, data_code2 = compile_expr env parent_env e2 in
       let l = unique_label env "cond_false" in
       text_code1 ++
       movq (ind ~ofs:(byte) rax) !%rdi ++
@@ -56,10 +56,10 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       je l ++
       text_code2 ++
       label l, 
-      data_code1 ++ data_code2, `bool  
+      data_code1 ++ data_code2
     | Bor ->
-      let text_code1, data_code1, expr_type1 = compile_expr env parent_env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env parent_env e2 in
+      let text_code1, data_code1 = compile_expr env parent_env e1 in
+      let text_code2, data_code2 = compile_expr env parent_env e2 in
       let l = unique_label env "cond_true" in
       text_code1 ++
       movq (ind ~ofs:(byte) rax) !%rdi ++
@@ -67,54 +67,91 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       jne l ++
       text_code2 ++
       label l,
-      data_code1 ++ data_code2, `bool
+      data_code1 ++ data_code2
     | Badd | Bsub | Bmul | Bdiv | Bmod | Beq | Bneq | Blt | Ble | Bgt | Bge ->
-      let text_code1, data_code1, expr_type1 = compile_expr env parent_env e1 in
-      let text_code2, data_code2, expr_type2 = compile_expr env parent_env e2 in
-      begin match op, expr_type1, expr_type2 with
-      | Badd, `int, `int ->
-        arith_asm text_code1 text_code2 (addq !%rsi !%rdi),
-        data_code1 ++ data_code2, `int
-      | Badd, `string l1, `string l2 ->
-        let new_label = unique_label env "string" in
+      let text_code1, data_code1 = compile_expr env parent_env e1 in
+      let text_code2, data_code2 = compile_expr env parent_env e2 in
+      begin match op with
+      | Badd ->
+        let end_label = unique_label env "end_label" in
+        let int_label = unique_label env "int" in
+        let string_label = unique_label env "string" in
         text_code1 ++
-        movq (ind ~ofs:(byte) rax) !%rdx ++
-        movq (ind ~ofs:(2 * byte) rax) !%rsi ++
-        leaq (lab new_label) rdi ++
-        pushq !%rdx ++
-        call "strcpy_wrapper" ++
-        text_code2 ++
-        popq rdx ++
-        addq (ind ~ofs:(byte) rax) !%rdx ++
-        movq (ind ~ofs:(2 * byte) rax) !%rsi ++
-        pushq !%rdx ++
-        call "strcat_wrapper" ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
-        movq (imm (3 * byte)) !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        movq (ind rdi) !%r10 ++
+        movq (ind rsi) !%r11 ++
+        cmpq !%r10 !%r11 ++
+        jne "runtime_error" ++
+        cmpq (imm 2) !%r10 ++
+        je int_label ++
+        cmpq (imm 3) !%r10 ++
+        je string_label ++
+        cmpq (imm 4) !%r10 ++
+        jne "runtime_error" ++
+        call "concat_list" ++
+        jmp end_label ++
+
+        label int_label ++
+        movq (ind ~ofs:(byte) rdi) !%rdi ++
+        addq (ind ~ofs:(byte) rsi) !%rdi ++
+        pushq (reg rdi) ++
+        movq (imm (2*byte)) (reg rdi) ++
         call "malloc_wrapper" ++
         popq rdi ++
-        popq rdx ++
-        movq (imm 3) (ind rax) ++
-        movq !%rdx (ind ~ofs:(byte) rax) ++
-        movq !%rdi (ind ~ofs:(2 * byte) rax),
-        data_code1 ++ data_code2 ++
-        label new_label ++ space (l1+l2+1), `string (l1 + l2)
-      | Badd, `list (len1, tl1), `list (len2, tl2) ->
-        text_code1 ++
-        movq !%rax !%rdi ++
+        movq (imm 2) (ind rax) ++
+        movq (reg rdi) (ind ~ofs:(byte) rax) ++
+        jmp end_label ++
+        
+
+        label string_label ++
+        movq (ind ~ofs:(byte) rdi) !%r10 ++
+        addq (ind ~ofs:(byte) rsi) !%r10 ++
+        movq !%r10 !%rcx ++
+        addq (imm 1) !%r10 ++
         pushq !%rdi ++
-        text_code2 ++
-        movq !%rax !%rsi ++
+        pushq !%rsi ++
+        pushq !%r10 ++
+        movq !%r10 !%rdi ++
+        call "malloc_wrapper" ++
+        popq r10 ++
+        popq rsi ++
         popq rdi ++
-        call "concat_list", data_code1 ++ data_code2, `list (len1 + len2, tl1 @ tl2)
-      | Bsub, `int, `int ->
+        movq (ind ~ofs:(2*byte) rdi) !%rdi ++
+        movq (ind ~ofs:(2*byte) rsi) !%rsi ++
+        pushq !%rdi ++
+        pushq !%rsi ++
+        pushq !%rcx ++
+        movq !%rdi !%rsi ++
+        movq !%rax !%rdi ++
+        call "strcpy_wrapper" ++
+        popq rcx ++
+        popq rsi ++
+        popq rdi ++
+        movq !%rax !%rdi ++
+        call "strcat_wrapper" ++
+        movq (imm (3*byte)) !%rdi ++
+        movq !%rax !%rsi ++
+        pushq !%rsi ++
+        pushq !%rcx ++
+        call "malloc_wrapper" ++
+        popq rcx ++
+        popq rsi ++
+        movq (imm 3) (ind rax) ++
+        movq !%rcx (ind ~ofs:byte rax) ++
+        movq !%rsi (ind ~ofs:(2 * byte) rax) ++
+        label end_label
+        , data_code1 ++ data_code2
+      | Bsub ->
         arith_asm text_code1 text_code2 (subq !%rsi !%rdi),
-        data_code1 ++ data_code2, `int
-      | Bmul, `int, `int ->
+        data_code1 ++ data_code2
+      | Bmul ->
         arith_asm text_code1 text_code2 (imulq !%rsi !%rdi),
-        data_code1 ++ data_code2, `int
-      | Bdiv, `int, `int ->
+        data_code1 ++ data_code2
+      | Bdiv ->
         arith_asm text_code1 text_code2
         (
           movq !%rdi !%rax ++
@@ -123,8 +160,8 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
           idivq !%rbx ++
           movq !%rax !%rdi
         ),
-        data_code1 ++ data_code2, `int
-      | Bmod, `int, `int ->
+        data_code1 ++ data_code2
+      | Bmod ->
         arith_asm text_code1 text_code2
         (
           movq !%rdi !%rax ++
@@ -133,66 +170,66 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
           idivq !%rbx ++
           movq !%rdx !%rdi
         ),
-        data_code1 ++ data_code2, `int
-      | Beq, `int, `int | Beq, `bool, `bool ->
-        arith_asm text_code1 text_code2
+        data_code1 ++ data_code2
+      | Beq ->
+        two_byte_operator_asm env text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
           sete !%dil ++
           movzbq !%dil rdi
         ),
-        data_code1 ++ data_code2, `bool
-      | Bneq, `int, `int | Bneq, `bool, `bool ->
-        arith_asm text_code1 text_code2
+        data_code1 ++ data_code2
+      | Bneq ->
+        two_byte_operator_asm env text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
           setne !%dil ++
           movzbq !%dil rdi
         ),
-        data_code1 ++ data_code2, `bool
-      | Blt, `int, `int | Blt, `bool, `bool ->
-        arith_asm text_code1 text_code2
+        data_code1 ++ data_code2
+      | Blt ->
+        two_byte_operator_asm env text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
           setl !%dil ++
           movzbq !%dil rdi
         ),
-        data_code1 ++ data_code2, `bool
-      | Ble, `int, `int | Ble, `bool, `bool ->
-        arith_asm text_code1 text_code2
+        data_code1 ++ data_code2
+      | Ble ->
+        two_byte_operator_asm env text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
           setle !%dil ++
           movzbq !%dil rdi
         ),
-        data_code1 ++ data_code2, `bool
-      | Bgt, `int, `int | Bgt, `bool, `bool ->
-        arith_asm text_code1 text_code2
+        data_code1 ++ data_code2
+      | Bgt ->
+        two_byte_operator_asm env text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
           setg !%dil ++
           movzbq !%dil rdi
         ),
-        data_code1 ++ data_code2, `bool
-      | Bge, `int, `int | Bge, `bool, `bool ->
-        arith_asm text_code1 text_code2
+        data_code1 ++ data_code2
+      | Bge ->
+        two_byte_operator_asm env text_code1 text_code2
         (
           cmpq !%rsi !%rdi ++
           setge !%dil ++
           movzbq !%dil rdi
         ),
-        data_code1 ++ data_code2, `bool
-      | _ ->
-        call "runtime_error", nop, `none
+        data_code1 ++ data_code2
+      | _ -> failwith "Unsupported binop"
       end
-    end
+      end
   | TEunop (op, e) ->
     begin match op with
     | Uneg ->
-      let text_code, data_code, expr_type = compile_expr env parent_env e in
-      begin match expr_type with
-      | `int ->
+      let text_code, data_code = compile_expr env parent_env e in
         text_code ++
+        movq (ind rax) !%r10 ++
+        cmpq (imm 2) !%r10 ++
+        jne "runtime_error" ++
         movq (ind ~ofs:(byte) rax) !%rdi ++
         negq !%rdi ++
         pushq !%rdi ++
@@ -201,62 +238,45 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
         popq rdi ++
         movq (imm 2) (ind rax) ++
         movq !%rdi (ind ~ofs:(byte) rax),
-        data_code, `int
-      | _ ->
-        failwith "Unsupported Uneg"
-      end
+        data_code
     | Unot ->
-      let text_code, data_code, expr_type = compile_expr env parent_env e in
-      begin match expr_type with
-      | `bool ->
-        text_code ++
-        movq (ind ~ofs:(byte) rax) !%rdi ++
-        xorq (imm 1) !%rdi ++
-        pushq !%rdi ++
-        movq (imm byte) !%rdi ++
-        call "malloc_wrapper" ++
-        popq rdi ++
-        movq (imm 1) (ind rax) ++
-        movq !%rdi (ind ~ofs:(byte) rax),
-        data_code, `bool
-      | _ ->
-        failwith "Unsupported Unot"
-      end
+      let text_code, data_code = compile_expr env parent_env e in
+      text_code ++
+      movq (ind rax) !%r10 ++
+      cmpq (imm 1) !%r10 ++
+      jne "runtime_error" ++
+      movq (ind ~ofs:(byte) rax) !%rdi ++
+      xorq (imm 1) !%rdi ++
+      pushq !%rdi ++
+      movq (imm byte) !%rdi ++
+      call "malloc_wrapper" ++
+      popq rdi ++
+      movq (imm 1) (ind rax) ++
+      movq !%rdi (ind ~ofs:(byte) rax),
+      data_code
     end
   | TEcall (fn, args) ->
     if fn.fn_name = "len" then
-      match args with
-      | [e] ->
-        let _, _, arg_type = compile_expr env parent_env e in
-        begin match arg_type with
-        | `string _ | `list _ -> 
-          failwith "Implement len logic here"
-        | `int ->
-          call "runtime_error", nop, `int
-        | _ -> 
-          failwith "TypeError: object of type is not iterable"
-        end
-      | _ ->
-        failwith "TypeError: len() takes exactly one argument"
+      failwith "TypeError: len() takes exactly one argument"
     else
       failwith "Unsupported function call"
   | TElist l ->
     let len = List.length l in
-    List.fold_left (fun (text_acc, data_acc, counter, type_acc) i ->
-      let text_expr, data_expr, expr_type = compile_expr env parent_env i in
+    List.fold_left (fun (text_acc, data_acc, counter) i ->
+      let text_expr, data_expr = compile_expr env parent_env i in
       text_acc ++
       pushq !%rax ++ (* save heap address*)
       text_expr ++
       movq !%rax !%rsi ++
       popq rax ++
       movq !%rsi (ind ~ofs:(counter) rax),
-      data_acc ++ data_expr, counter + byte, type_acc @ [expr_type]
-    ) (nop, nop, 2 * byte, []) l |> fun (text_code, data_code, _, types) ->
+      data_acc ++ data_expr, counter + byte
+    ) (nop, nop, 2 * byte) l |> fun (text_code, data_code, _) ->
     movq (imm ((len + 2) * byte)) !%rdi ++
     call "malloc_wrapper" ++
     movq (imm 4) (ind rax) ++ (* type *)
     movq (imm len) (ind ~ofs:(byte) rax) ++ (* length *)
-    text_code, data_code, `list (len, types)
+    text_code, data_code
   | TErange e ->
     failwith "Unsupported TErange"
   | TEget (e1, e2) ->
@@ -265,7 +285,7 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
 let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.text * X86_64.data =
   match stmt with
   | TSif (cond, s1, s2) ->
-    let text_code_cond, data_code_cond, _ = compile_expr env parent_env cond in
+    let text_code_cond, data_code_cond = compile_expr env parent_env cond in
     let text_code_s1, data_code_s1 = compile_stmt env parent_env s1 in
     let text_code_s2, data_code_s2 = compile_stmt env parent_env s2 in
     let else_label = unique_label env "else" in
@@ -283,13 +303,13 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
     failwith "Unsupported Sreturn"
   | TSassign (var, expr) ->
     env.stack_offset <- env.stack_offset - byte;
-    let text_code, data_code, expr_type = compile_expr env parent_env expr in
-    env.vars <- StringMap.add var.v_name (var, env.stack_offset, expr_type) env.vars;
+    let text_code, data_code = compile_expr env parent_env expr in
+    env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
     text_code ++
     movq !%rax (ind ~ofs:(env.stack_offset) rbp)
     , data_code
   | TSprint expr ->
-    let text_code, data_code, _ = compile_expr env parent_env expr in
+    let text_code, data_code = compile_expr env parent_env expr in
     text_code ++
     movq !%rax !%rdi ++
     call "print_value" ++
@@ -304,52 +324,94 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       text_code
       , data_code
   | TSfor (var, expr, body) ->
-    let expr_text_code, expr_data_code, expr_type = compile_expr env parent_env expr in
-    begin match expr_type with
-    | `list (len, tl) ->
-      let env_local = {
-        vars = StringMap.add var.v_name (var, -byte, `chaos) env.vars;
-        funcs = StringMap.empty;
-        stack_offset = -byte;
-        counters = StringMap.empty;
-      } in
-      let body_text_code, body_data_code = compile_stmt env_local env body in
+    let expr_text_code, expr_data_code = compile_expr env parent_env expr in
+    (* let env_local = {
+      vars = StringMap.add var.v_name (var, -byte) env.vars;
+      funcs = StringMap.empty;
+      stack_offset = -byte;
+      counters = StringMap.empty;
+    } in *)
+    begin try
+      let found_var, found_ofs = StringMap.find var.v_name env.vars in 
+      env.vars <- StringMap.add var.v_name (var, found_ofs) env.vars;
+      let body_text_code, body_data_code = compile_stmt env parent_env body in
       let loop_label = unique_label env "loop" in
       let end_label = unique_label env "end" in
-        comment "for loop" ++
-        expr_text_code ++
-        movq !%rax !%rdi ++
-        addq (imm (2 * byte)) !%rdi ++
-        addq (imm env_local.stack_offset) !%rsp ++
-        movq !%rdi !%rsi ++
-        movq (ind rdi) !%r10 ++
-        movq !%r10 (ind ~ofs:(env_local.stack_offset+env.stack_offset) rbp) ++
-        movq (imm len) !%rcx ++
-        
-        label loop_label ++
-        testq !%rcx !%rcx ++
-        jz end_label ++
-        movq (ind ~ofs:(env_local.stack_offset+env.stack_offset) rbp) !%rax ++
-        pushq !%rcx ++
-        pushq !%rdi ++
-        pushq !%rsi ++
-        comment "body" ++
-        body_text_code ++
-        comment "end body" ++
-        popq rsi ++
-        popq rdi ++
-        popq rcx ++
-        decq !%rcx ++
-        addq (imm byte) !%rsi ++
-        movq (ind rsi) !%r10 ++
-        movq !%r10 (ind ~ofs:(env_local.stack_offset+env.stack_offset) rbp) ++
-        jmp loop_label ++
-        label end_label ++
-        subq (imm env_local.stack_offset) !%rsp
-        ,expr_data_code ++ body_data_code
-    | _ ->
-      call "runtime_error", nop
-    end
+      let do_jump = unique_label env "do_jump" in 
+      comment "for loop" ++
+      expr_text_code ++
+      movq !%rax !%rdi ++
+      movq (ind ~ofs:byte rax) !%rcx ++
+      addq (imm (2 * byte)) !%rdi ++
+      movq !%rdi !%rsi ++
+      movq (ind rdi) !%r10 ++
+      jmp do_jump ++
+
+      label loop_label ++
+      testq !%rcx !%rcx ++
+	    jz end_label ++
+      addq (imm byte) !%rsi ++
+      movq (ind rsi) !%r10 ++
+      movq !%r10 (ind ~ofs:(found_ofs) rbp) ++
+      
+      label do_jump ++
+      testq !%rcx !%rcx ++
+      jz end_label ++
+      pushq !%rcx ++
+      pushq !%rdi ++
+      pushq !%rsi ++
+      comment "body" ++
+      body_text_code ++
+      comment "end body" ++
+      popq rsi ++
+      popq rdi ++
+      popq rcx ++
+      decq !%rcx ++
+      
+      jmp loop_label ++
+      label end_label
+      ,expr_data_code ++ body_data_code
+    with Not_found ->
+      (* env.stack_offset <- env.stack_offset - byte; *)
+      env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
+      let body_text_code, body_data_code = compile_stmt env parent_env body in
+      let loop_label = unique_label env "loop" in
+      let end_label = unique_label env "end" in
+      let do_jump = unique_label env "do_jump" in 
+      comment "for loop" ++
+      expr_text_code ++
+      movq !%rax !%rdi ++
+      movq (ind ~ofs:byte rax) !%rcx ++
+      addq (imm (2 * byte)) !%rdi ++
+      movq !%rdi !%rsi ++
+      movq (ind rdi) !%r10 ++
+      jmp do_jump ++
+
+      label loop_label ++
+      testq !%rcx !%rcx ++
+	    jz end_label ++
+      addq (imm byte) !%rsi ++
+      movq (ind rsi) !%r10 ++
+      movq !%r10 (ind ~ofs:(env.stack_offset) rbp) ++
+      
+      label do_jump ++
+      testq !%rcx !%rcx ++
+      jz end_label ++
+      pushq !%rcx ++
+      pushq !%rdi ++
+      pushq !%rsi ++
+      comment "body" ++
+      body_text_code ++
+      comment "end body" ++
+      popq rsi ++
+      popq rdi ++
+      popq rcx ++
+      decq !%rcx ++
+      
+      jmp loop_label ++
+      label end_label
+      ,expr_data_code ++ body_data_code
+    end;
   | TSeval expr ->
     failwith "Unsupported TSeval"
   | TSset (e1, e2, e3) ->
