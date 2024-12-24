@@ -333,7 +333,6 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
     } in *)
     begin try
       let found_var, found_ofs = StringMap.find var.v_name env.vars in 
-      env.vars <- StringMap.add var.v_name (var, found_ofs) env.vars;
       let body_text_code, body_data_code = compile_stmt env parent_env body in
       let loop_label = unique_label env "loop" in
       let end_label = unique_label env "end" in
@@ -345,6 +344,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       addq (imm (2 * byte)) !%rdi ++
       movq !%rdi !%rsi ++
       movq (ind rdi) !%r10 ++
+      movq !%r10 (ind ~ofs:(found_ofs) rbp) ++
       jmp do_jump ++
 
       label loop_label ++
@@ -372,7 +372,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       label end_label
       ,expr_data_code ++ body_data_code
     with Not_found ->
-      (* env.stack_offset <- env.stack_offset - byte; *)
+      env.stack_offset <- env.stack_offset - byte;
       env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
       let body_text_code, body_data_code = compile_stmt env parent_env body in
       let loop_label = unique_label env "loop" in
@@ -385,6 +385,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       addq (imm (2 * byte)) !%rdi ++
       movq !%rdi !%rsi ++
       movq (ind rdi) !%r10 ++
+      movq !%r10 (ind ~ofs:(env.stack_offset) rbp) ++
       jmp do_jump ++
 
       label loop_label ++
