@@ -1,8 +1,7 @@
+(** {0 Library for writing X86-64 programs }
 
-(** {0 Bibliothèque pour l'écriture de programmes X86-64 }
-
-    Il s'agit là uniquement d'un fragment relativement petit
-    de l'assembleur X86-64.
+    This is only a relatively small fragment
+    of the X86-64 assembler.
 
     @author Jean-Christophe Filliâtre (CNRS)
     @author Kim Nguyen (Université Paris Sud)
@@ -44,12 +43,12 @@ val print_program : Format.formatter -> program -> unit
 
 val print_in_file: file:string -> program -> unit
 
-(** {1 Registres } *)
+(** {1 Registers } *)
 
 type size = [`B | `W | `L | `Q]
 
 type 'size register
-  (** type abstrait des registres *)
+  (** abstract type of registers *)
 
 val rax: [`Q] register
 val rbx: [`Q] register
@@ -67,7 +66,7 @@ val r12: [`Q] register
 val r13: [`Q] register
 val r14: [`Q] register
 val r15: [`Q] register
-  (** registres 64 bits *)
+  (** 64-bit registers *)
 
 val eax: [`L] register
 val ebx: [`L] register
@@ -85,7 +84,7 @@ val r12d: [`L] register
 val r13d: [`L] register
 val r14d: [`L] register
 val r15d: [`L] register
-  (** registres 32 bits *)
+  (** 32-bit registers *)
 
 val ax: [`W] register
 val bx: [`W] register
@@ -103,7 +102,7 @@ val r12w: [`W] register
 val r13w: [`W] register
 val r14w: [`W] register
 val r15w: [`W] register
-  (** registres 16 bits *)
+  (** 16-bit registers *)
 
 val al: [`B] register
 val bl: [`B] register
@@ -125,12 +124,12 @@ val r12b: [`B] register
 val r13b: [`B] register
 val r14b: [`B] register
 val r15b: [`B] register
-  (** registres 8 bits *)
+  (** 8-bit registers *)
 
-(** {1 Opérandes } *)
+(** {1 Operands } *)
 
 type 'size operand
-  (** Le type abstrait des opérandes *)
+  (** The abstract type of operands *)
 
 val imm: int -> [>] operand
   (** immediate operand $i *)
@@ -157,7 +156,7 @@ val ilab: label -> [`Q] operand
 
 (** {1 Instructions } *)
 
-(** {2 Transfert } *)
+(** {2 Transfer } *)
 
 val movb: [`B] operand -> [`B] operand -> text
 val movw: [`W] operand -> [`W] operand -> text
@@ -189,18 +188,18 @@ val cmovne: 'size operand -> 'size operand -> text  (* <> 0 *)
 val cmovnz: 'size operand -> 'size operand -> text  (* <> 0 *)
 val cmovs : 'size operand -> 'size operand -> text  (* <  0 *)
 val cmovns: 'size operand -> 'size operand -> text  (* >= 0 *)
-val cmovg : 'size operand -> 'size operand -> text  (* >  signé *)
-val cmovge: 'size operand -> 'size operand -> text  (* >= signé *)
-val cmovl : 'size operand -> 'size operand -> text  (* <  signé *)
-val cmovle: 'size operand -> 'size operand -> text  (* <= signé *)
-val cmova : 'size operand -> 'size operand -> text  (* >  non signé *)
-val cmovae: 'size operand -> 'size operand -> text  (* >= non signé *)
-val cmovb : 'size operand -> 'size operand -> text  (* <  non signé *)
-val cmovbe: 'size operand -> 'size operand -> text  (* <= non signé *)
+val cmovg : 'size operand -> 'size operand -> text  (* >  signed *)
+val cmovge: 'size operand -> 'size operand -> text  (* >= signed *)
+val cmovl : 'size operand -> 'size operand -> text  (* <  signed *)
+val cmovle: 'size operand -> 'size operand -> text  (* <= signed *)
+val cmova : 'size operand -> 'size operand -> text  (* >  unsigned *)
+val cmovae: 'size operand -> 'size operand -> text  (* >= unsigned *)
+val cmovb : 'size operand -> 'size operand -> text  (* <  unsigned *)
+val cmovbe: 'size operand -> 'size operand -> text  (* <= unsigned *)
   (** conditional move
     (note: not all operand combinations are allowed) *)
 
-(** {2 Arithmétique } *)
+(** {2 Arithmetic } *)
 
 val leab: [`B] operand -> [`B] register -> text
 val leaw: [`W] operand -> [`W] register -> text
@@ -239,7 +238,7 @@ val imulq: [`Q] operand -> [`Q] operand -> text
 val idivq: [`Q] operand -> text
 val cqto: text
 
-(** {2 Opérations logiques } *)
+(** {2 Logical operations } *)
 
 val notb: [`B] operand -> text
 val notw: [`W] operand -> text
@@ -262,7 +261,7 @@ val xorl: [`L] operand -> [`L] operand -> text
 val xorq: [`Q] operand -> [`Q] operand -> text
   (** Bit manipulation operations. Bitwise "and", bitwise "or", bitwise "not" *)
 
-(** {2 Décalages } *)
+(** {2 Shifts } *)
 
 val shlb: [`B] operand -> [`B] operand -> text
 val shlw: [`W] operand -> [`W] operand -> text
@@ -280,7 +279,7 @@ val sarw: [`W] operand -> [`W] operand -> text
 val sarl: [`L] operand -> [`L] operand -> text
 val sarq: [`Q] operand -> [`Q] operand -> text
 
-(** {2 Sauts } *)
+(** {2 Jumps } *)
 
 val call: label -> text
 val call_star: [`Q] operand -> text
@@ -300,14 +299,14 @@ val jne: label -> text  (* <> 0 *)
 val jnz: label -> text  (* <> 0 *)
 val js : label -> text  (* <  0 *)
 val jns: label -> text  (* >= 0 *)
-val jg : label -> text  (* >  signé *)
-val jge: label -> text  (* >= signé *)
-val jl : label -> text  (* <  signé *)
-val jle: label -> text  (* <= signé *)
-val ja : label -> text  (* >  non signé *)
-val jae: label -> text  (* >= non signé *)
-val jb : label -> text  (* <  non signé *)
-val jbe: label -> text  (* <= non signé *)
+val jg : label -> text  (* >  signed *)
+val jge: label -> text  (* >= signed *)
+val jl : label -> text  (* <  signed *)
+val jle: label -> text  (* <= signed *)
+val ja : label -> text  (* >  unsigned *)
+val jae: label -> text  (* >= unsigned *)
+val jb : label -> text  (* <  unsigned *)
+val jbe: label -> text  (* <= unsigned *)
   (** conditional jumps *)
 
 (** {2 Conditions } *)
@@ -326,17 +325,17 @@ val sete : [`B] operand -> text  (* =  0 *)
 val setne: [`B] operand -> text  (* <> 0 *)
 val sets : [`B] operand -> text  (* <  0 *)
 val setns: [`B] operand -> text  (* >= 0 *)
-val setg : [`B] operand -> text  (* >  signé *)
-val setge: [`B] operand -> text  (* >= signé *)
-val setl : [`B] operand -> text  (* <  signé *)
-val setle: [`B] operand -> text  (* <= signé *)
-val seta : [`B] operand -> text  (* >  non signé *)
-val setae: [`B] operand -> text  (* >= non signé *)
-val setb : [`B] operand -> text  (* <  non signé *)
-val setbe: [`B] operand -> text  (* <= non signé *)
+val setg : [`B] operand -> text  (* >  signed *)
+val setge: [`B] operand -> text  (* >= signed *)
+val setl : [`B] operand -> text  (* <  signed *)
+val setle: [`B] operand -> text  (* <= signed *)
+val seta : [`B] operand -> text  (* >  unsigned *)
+val setae: [`B] operand -> text  (* >= unsigned *)
+val setb : [`B] operand -> text  (* <  unsigned *)
+val setbe: [`B] operand -> text  (* <= unsigned *)
   (** sets the operand byte to 1 or 0 depending on whether the test is true or not *)
 
-(** {2 Manipulation de la pile} *)
+(** {2 Stack manipulation} *)
 
 val pushq : [`Q] operand -> text
   (** [pushq r] places the content of [r] at the top of the stack.
@@ -345,7 +344,7 @@ val pushq : [`Q] operand -> text
 val popq : [`Q] register -> text
   (** [popq r] places the word at the top of the stack into [r] and pops the stack *)
 
-(** {2 Divers } *)
+(** {2 Misc. } *)
 
 val label : label -> [> ] asm
   (** a label. Can be found in text or data *)
@@ -357,20 +356,19 @@ val comment : string -> [> ] asm
   (** places a comment in the generated code. Can be found in
     text or data *)
 
-(** {2 Données } *)
+(** {2 Data } *)
 
 val string : string -> data
-  (** une constante chaîne de caractères (terminée par 0) *)
+  (** a string constant (terminated by 0) *)
 
 val dbyte : int list -> data
 val dword : int list -> data
 val dint : int list -> data
 val dquad : int list -> data
-  (** place une liste de valeurs sur 1/2/4/8 octets dans la zone data *)
+  (** place a list of values on 1/2/4/8 bytes in the data section *)
 
 val address: label list -> data
-  (** place une liste d'adresses dans la zone data (avec .quad) *)
+  (** place a list of addresses in the data section (with .quad) *)
 
 val space: int -> data
-  (** [space n] alloue [n] octets (valant 0) dans le segment de données *)
-
+  (** [space n] allocates [n] bytes (set to 0) in the data segment *)
