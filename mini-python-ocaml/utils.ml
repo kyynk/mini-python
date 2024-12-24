@@ -34,7 +34,7 @@ let arith_asm (code1:X86_64.text) (code2:X86_64.text) (instructions:X86_64.text)
   cmpq !%r8 !%r9 ++
   jne "runtime_error" ++
   cmpq (imm 2) !%r8 ++
-  jne "runtime _error" ++
+  jne "runtime_error" ++
   instructions ++
   pushq (reg rdi) ++
   movq (imm byte) (reg rdi) ++
