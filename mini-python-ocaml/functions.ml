@@ -601,3 +601,87 @@ let func_list env : X86_64.text =
   addq (imm byte) !%r8 ++
   jmp loop ++
   label end_label
+
+
+  let func_eq_value env =
+    let eq_bool_int = unique_label env "eq_bool_int" in
+    let eq_string = unique_label env "eq_string" in
+    let eq_list_loop = unique_label env "eq_list_loop" in
+    let eq_set_neq = unique_label env "eq_setn_eq" in
+    let eq_set_eq = unique_label env "eq_set_eq" in
+    let eq_end = unique_label env "eq_end" in
+    
+    label "eq_value" ++
+    pushq !%rbp ++
+    movq !%rsp !%rbp ++
+    movq (ind rdi) !%r8 ++
+    movq (ind rsi) !%r9 ++
+    cmpq !%r8 !%r9 ++
+    jne eq_set_neq ++
+    cmpq (imm 0) !%r8 ++
+    je "runtime_error" ++
+    cmpq (imm 2) !%r8 ++
+    jle eq_bool_int ++
+    cmpq (imm 3) !%r8 ++
+    je eq_string ++
+    cmpq (imm 4) !%r8 ++
+    jne "runtime_error" ++
+    movq (ind ~ofs:(byte) rdi) !%rcx ++
+    movq (ind ~ofs:(byte) rsi) !%r10 ++
+    cmpq !%rcx !%r10 ++
+    jne eq_set_neq ++
+    movq !%rdi !%r8 ++
+    addq (imm (2*byte)) !%r8 ++
+    movq !%rsi !%r9 ++
+    addq (imm (2*byte)) !%r9 ++
+  
+    label eq_list_loop ++
+    testq !%rcx !%rcx ++
+    je eq_set_eq ++
+    movq (ind r8) !%rdi ++
+    movq (ind r9) !%rsi ++
+    pushq !%rcx ++
+    call "eq_value" ++
+    popq rcx ++
+    movq (ind ~ofs:byte rax) !%r10 ++
+    cmpq (imm 0) !%r10 ++
+    je eq_set_neq ++
+    decq !%rcx ++
+    addq (imm (2*byte)) !%r8 ++
+    addq (imm (2*byte)) !%r9 ++
+    jmp eq_list_loop ++
+  
+    label eq_bool_int ++
+    movq (ind ~ofs:byte rdi) !%r8 ++
+    movq (ind ~ofs:byte rsi) !%r9 ++
+    cmpq !%r8 !%r9 ++
+    je eq_set_eq ++
+    jmp eq_set_neq ++
+  
+    label eq_string ++
+    movq (ind ~ofs:(byte) rdi) !%r8 ++
+    movq (ind ~ofs:(byte) rsi) !%r9 ++
+    jne eq_set_neq ++
+    movq (ind ~ofs:(2 * byte) rdi) !%rdi ++
+    movq (ind ~ofs:(2 * byte) rsi) !%rsi ++
+    call "strcmp_wrapper" ++
+    cmpq (imm 0) !%rax ++
+    je eq_set_eq ++
+  
+  
+    label eq_set_neq ++
+    movq (imm (2 * byte)) !%rdi ++
+    call "malloc_wrapper" ++
+    movq (imm 1) (ind rax) ++
+    movq (imm 0) (ind ~ofs:byte rax) ++
+    jmp eq_end ++
+  
+    label eq_set_eq ++
+    movq (imm (2 * byte)) !%rdi ++
+    call "malloc_wrapper" ++
+    movq (imm 1) (ind rax) ++
+    movq (imm 1) (ind ~ofs:byte rax) ++
+    
+    label eq_end ++
+    leave ++
+    ret

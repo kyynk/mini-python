@@ -172,12 +172,13 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
         ),
         data_code1 ++ data_code2
       | Beq ->
-        two_byte_operator_asm env text_code1 text_code2
-        (
-          cmpq !%rsi !%rdi ++
-          sete !%dil ++
-          movzbq !%dil rdi
-        ),
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        call "eq_value",
         data_code1 ++ data_code2
       | Bneq ->
         two_byte_operator_asm env text_code1 text_code2
@@ -486,7 +487,8 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       func_copy_value env ++
       func_list_concat env ++
       func_print_value env ++
-      globl "main" ++ text_code;    
+      func_eq_value env ++
+      globl "main" ++ text_code;
     data = 
       data_code ++
       func_print_none_data ++
