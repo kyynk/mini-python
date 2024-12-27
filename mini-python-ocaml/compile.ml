@@ -5,6 +5,7 @@ open Ast
 open Utils
 open Environment
 open Functions
+open Const
 
 let debug = ref false
 

@@ -2,8 +2,8 @@ open Format
 open X86_64
 open Ast
 open Environment
+open Const
 
-let byte = 8
 
 let put_character (c:char): X86_64.text =
   movq (imm (Char.code c)) !%rdi ++

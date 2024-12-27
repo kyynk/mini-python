@@ -1,6 +1,7 @@
 open Environment
 open X86_64
 open Utils
+open Const
 
 let func_print_none_text : X86_64.text =
   label "print_none" ++
@@ -525,8 +526,8 @@ let func_list_concat (env:env_t): X86_64.text =
   movq !%r8 (ind rdx) ++
   decq !%rcx ++
   addq (imm byte) !%rdx ++
-  addq (imm byte) !%rdi ++
   jmp second_loop ++
+  addq (imm byte) !%rdi ++
 
   label func_list_concat_end ++
   leave ++
