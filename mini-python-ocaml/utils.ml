@@ -95,28 +95,8 @@ let c_standard_function_wrapper (fn_name:string): X86_64.text =
   popq rbp ++
   ret
 
-let emit_runtime_error (env:env_t): X86_64.text * X86_64.data =
-  let error_text_label = "runtime_error" in
-  let error_data_label = unique_label env "emit_runtime_error_msg" in
-  let text_code =
-    label error_text_label ++
-    leaq (lab error_data_label) rdi ++
-    xorq !%rax !%rax ++
-    call "printf_wrapper" ++
-    movq (imm 1) !%rdi ++
-    call "exit" ++
-    nop
-  in
-  let data_code =
-    label error_data_label ++
-    string "Runtime error occurred\n"
-  in
-  text_code, data_code
-
-
-let construct_texpr_list (len:int) : texpr list =
-  let rec aux acc i =
-    if i = len then acc
-    else aux (TEcst (Cint 0L) :: acc) (i + 1)
-  in
-  aux [] 0
+let bool_builder i = 
+  movq (imm (2*byte)) !%rdi ++
+  call "malloc_wrapper" ++
+  movq (imm 1) (ind rax) ++
+  movq (imm i) (ind ~ofs:byte rax)

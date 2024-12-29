@@ -173,57 +173,160 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
         ),
         data_code1 ++ data_code2
       | Beq ->
+        let beq = unique_label env "beq_false" in
+        let beq_end = unique_label env "beq_end" in
+        let type_eq  = unique_label env "type_eq" in
         text_code1 ++
         movq !%rax !%rdi ++
         pushq !%rdi ++
         text_code2 ++
         popq rdi ++
         movq !%rax !%rsi ++
-        call "eq_value",
+        movq (ind rdi) !%rdx ++ (* rdi type to rdx *)
+        movq (ind rsi) !%rcx ++ (* rsi type to rcx *)
+        cmpq !%rdx !%rcx ++
+        je type_eq ++
+        bool_builder 0 ++
+        jmp beq_end ++
+        label type_eq ++
+        call "difference" ++
+        cmpq (imm 0) !%rax ++
+        jne beq ++
+        bool_builder 1 ++
+        jmp beq_end ++
+        label beq ++
+        bool_builder 0 ++
+        label beq_end,
         data_code1 ++ data_code2
       | Bneq ->
-        two_byte_operator_asm env text_code1 text_code2
-        (
-          cmpq !%rsi !%rdi ++
-          setne !%dil ++
-          movzbq !%dil rdi
-        ),
+        let beq = unique_label env "beq_false" in
+        let beq_end = unique_label env "beq_end" in
+        let type_eq  = unique_label env "type_eq" in
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        movq (ind rdi) !%rdx ++ (*rdi type to rdx*)
+        movq (ind rsi) !%rcx ++(*rsi type to rcx *)
+        cmpq !%rdx !%rcx ++
+        je type_eq ++
+        bool_builder 1 ++
+        jmp beq_end ++
+        label type_eq ++
+        call "difference" ++
+        cmpq (imm 0) !%rax ++
+        je beq ++
+        bool_builder 1 ++
+        jmp beq_end ++
+        label beq ++
+        bool_builder 0 ++
+        label beq_end,
         data_code1 ++ data_code2
       | Blt ->
-        two_byte_operator_asm env text_code1 text_code2
-        (
-          cmpq !%rsi !%rdi ++
-          setl !%dil ++
-          movzbq !%dil rdi
-        ),
+        let blt = unique_label env "blt_false" in
+        let blt_end = unique_label env "blt_end" in
+        let type_eq  = unique_label env "type_eq" in
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        movq (ind rdi) !%rdx ++
+        movq (ind rsi) !%rcx ++
+        cmpq !%rdx !%rcx ++
+        je type_eq ++
+        call "runtime_error" ++
+        label type_eq ++
+        call "difference" ++
+        cmpl (imm 0) !%eax ++
+        jge blt ++
+        bool_builder 1 ++
+        jmp blt_end ++
+        label blt ++
+        bool_builder 0 ++
+        label blt_end,
         data_code1 ++ data_code2
       | Ble ->
-        two_byte_operator_asm env text_code1 text_code2
-        (
-          cmpq !%rsi !%rdi ++
-          setle !%dil ++
-          movzbq !%dil rdi
-        ),
+        let ble = unique_label env "ble_false" in
+        let ble_end = unique_label env "ble_end" in
+        let type_eq  = unique_label env "type_eq" in
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        movq (ind rdi) !%rdx ++
+        movq (ind rsi) !%rcx ++
+        cmpq !%rdx !%rcx ++
+        je type_eq ++
+        call "runtime_error" ++
+        label type_eq ++
+        call "difference" ++
+        cmpl (imm 0) !%eax ++
+        jg ble ++
+        bool_builder 1 ++
+        jmp ble_end ++
+        label ble ++
+        bool_builder 0 ++
+        label ble_end,
         data_code1 ++ data_code2
       | Bgt ->
-        two_byte_operator_asm env text_code1 text_code2
-        (
-          cmpq !%rsi !%rdi ++
-          setg !%dil ++
-          movzbq !%dil rdi
-        ),
+        let bgt = unique_label env "bgt_false" in
+        let bgt_end = unique_label env "bgt_end" in
+        let type_eq  = unique_label env "type_eq" in
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        movq (ind rdi) !%rdx ++
+        movq (ind rsi) !%rcx ++
+        cmpq !%rdx !%rcx ++
+        je type_eq ++
+        call "runtime_error" ++
+        label type_eq ++
+        call "difference" ++
+        cmpl (imm 0) !%eax ++
+        jle bgt ++
+        bool_builder 1 ++
+        jmp bgt_end ++
+        label bgt ++
+        bool_builder 0 ++
+        label bgt_end,
         data_code1 ++ data_code2
       | Bge ->
-        two_byte_operator_asm env text_code1 text_code2
-        (
-          cmpq !%rsi !%rdi ++
-          setge !%dil ++
-          movzbq !%dil rdi
-        ),
+        let bge = unique_label env "bge_false" in
+        let bge_end = unique_label env "bge_end" in
+        let type_eq  = unique_label env "type_eq" in
+        text_code1 ++
+        movq !%rax !%rdi ++
+        pushq !%rdi ++
+        text_code2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        movq (ind rdi) !%rdx ++
+        movq (ind rsi) !%rcx ++
+        cmpq !%rdx !%rcx ++
+        je type_eq ++
+        call "runtime_error" ++
+        label type_eq ++
+        call "difference" ++
+        cmpl (imm 0) !%eax ++
+        jl bge ++
+        bool_builder 1 ++
+        jmp bge_end ++
+        label bge ++
+        bool_builder 0 ++
+        label bge_end,
         data_code1 ++ data_code2
       | _ -> failwith "Unsupported binop"
       end
-      end
+    end
   | TEunop (op, e) ->
     begin match op with
     | Uneg ->
@@ -263,14 +366,14 @@ let rec compile_expr (env: env_t) (parent_env:env_t) (expr: Ast.texpr) : X86_64.
       if List.length args = 1 then
         let text_code, data_code = compile_expr env parent_env (List.hd args) in
         text_code ++
-        func_len
+        call "func_len"
         , data_code
       else failwith "len function takes exactly one argument"
     | "list" ->
       if List.length args = 1 then
         let text_code, data_code = compile_expr env parent_env (List.hd args) in
         text_code ++
-        func_list env
+        call "func_list"
         , data_code
       else failwith "list function takes exactly one argument"
     | _ ->
@@ -468,8 +571,7 @@ let compile_def env ((fn, body): Ast.tdef) : X86_64.text * X86_64.data =
 let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
   debug := b;
   let env = empty_env in
-  let runtime_error_text, runtime_error_data = emit_runtime_error env in
-  (* Compile each function *)
+  let text_fn, data_fn = func env in
   let text_code, data_code = List.fold_left (fun (text_acc, data_acc) (fn, body) ->
     let fn_code, data_code = compile_def env (fn, body) in
     (text_acc ++ fn_code, data_acc ++ data_code)
@@ -482,19 +584,10 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
       c_standard_function_wrapper "strcmp" ++
       c_standard_function_wrapper "strcpy" ++
       c_standard_function_wrapper "strcat" ++
-      runtime_error_text ++
-      func_copy_two_byte ++
-      func_copy_string ++
-      func_copy_value env ++
-      func_list_concat env ++
-      func_print_value env ++
-      func_eq_value env ++
+      text_fn ++
       globl "main" ++ text_code;
     data = 
+      data_fn ++
       data_code ++
-      func_print_none_data ++
-      func_print_bool_data ++
-      func_print_int_data ++
-      runtime_error_data ++
       inline "\t.section .note.GNU-stack,\"\",@progbits\n";
   }
