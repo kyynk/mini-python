@@ -6,12 +6,12 @@
 # print(b)
 # c = not False
 # print(c)
-ppp = list(range(2))
-print(ppp)
-d = "hello"
-print(d)
-dd = " world"
-print(d+dd)
+# ppp = list(range(2))
+# print(ppp)
+# d = "hello"
+# print(d)
+# dd = " world"
+# print(d+dd)
 # e = [1,[2,["hrt",[True,[-5]]]]]
 # print(e)
 
@@ -23,23 +23,23 @@ print(d+dd)
 # g = [[2, not g_arg, 4]]
 # print(g)
 # hh = 2
-i = [1,[2,["hrt",[True,[-5]]]]]
-print(i)
+# i = [1,[2,["hrt",[True,[-5]]]]]
+# print(i)
 # print(i+i)
 # # # # print(1 < 2 and len(1))
 
 # print([] + [])
 # print([1,2] + [3,4,5])
 
-h = [-1, 2, ["asd", True], "dasd"]
-print(len(h))
+# h = [-1, 2, ["asd", True], "dasd"]
+# print(len(h))
 
 # print(h)
 # x = 43
 # aaaa = 3
-for x in h:
-    print(x)
-print(x)
+# for x in h:
+#     print(x)
+# print(x)
 # print(4+1)
 # a = "asd"
 # b = "adgg"
@@ -52,4 +52,62 @@ print(x)
 # print(1>=2)
 # print(6<=3)
 # print(3==2)
+
 # print(3!=3)
+# print([1] == [1])
+# print([1] == [2])
+# print(1==1)
+# print(1==2)
+
+print(True == True)
+print(False == False)
+print([1,4] == [1,1,4])
+print("a" == "a")
+print("a" == "b")
+
+print("a" != "A")
+print("a" != "aa")
+print("a" != "ab")
+print("a" != None)
+print("a" != "a")
+
+# print(1<2)
+# print(3<1)
+# print(1<1)
+# print(2<2)
+# print("\n")
+# print("bbb"<"bb")
+# print("aa"<"aaa")
+# print("aa"<"aa")
+# print("\n")
+# print([1,1,2]<[1])
+# print([1,1,2]<[3])
+# print([1]<[1,1,2])
+# print([1,1,2]<[1,1,2])
+
+# print(1<=2)
+# print(3<=1)
+# print(1<=1)
+# print(2<=2)
+# print("\n")
+# print("bbb"<="bb")
+# print("aa"<="aaa")
+# print("aa"<="aa")
+# print("\n")
+# print([1,1,2]<=[1])
+# print([1,1,2]<=[3])
+# print([1]<=[1,1,2])
+# print([1,1,2]<=[1,1,2])
+# print(1>=2)
+# print(3>=1)
+# print(1>=1)
+# print(2>=2)
+# print("\n")
+# print("bbb">="bb")
+# print("aa">="aaa")
+# print("aa">="aa")
+# print("\n")
+# print([1,1,2]>=[1])
+# print([1,1,2]>=[3])
+# print([1]>=[1,1,2])
+# print([1,1,2]>=[1,1,2])
