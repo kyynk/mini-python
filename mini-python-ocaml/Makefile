@@ -23,7 +23,7 @@ test_compile: minipython.exe
 	cd ..
 
 format:
-	opam exec -- dune fmt 
+	opam exec -- dune fmt > /dev/null 2>&1 || true
 
 clean:
 	dune clean

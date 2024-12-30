@@ -330,8 +330,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
         let text_expr, data_expr = compile_expr env parent_env i in
         ( text_acc
           ++ pushq !%rax
-          ++ (* save heap address*)
-          text_expr
+          ++ text_expr
           ++ movq !%rax !%rsi
           ++ popq rax
           ++ movq !%rsi (ind ~ofs:counter rax)
@@ -343,10 +342,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
     ( movq (imm ((len + 2) * byte)) !%rdi
       ++ call "malloc_wrapper"
       ++ movq (imm 4) (ind rax)
-      ++ (* type *)
-      movq (imm len) (ind ~ofs:byte rax)
-      ++ (* length *)
-      text_code
+      ++ movq (imm len) (ind ~ofs:byte rax)
+      ++ text_code
     , data_code )
   | TErange e ->
     let text_code, data_code = compile_expr env parent_env e in
