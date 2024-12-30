@@ -415,83 +415,53 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
     |> fun (text_code, data_code) -> text_code, data_code
   | TSfor (var, expr, body) ->
     let expr_text_code, expr_data_code = compile_expr env parent_env expr in
-    (* let env_local = {
-           vars = StringMap.add var.v_name (var, -byte) env.vars;
-           funcs = StringMap.empty;
-           stack_offset = -byte;
-           counters = StringMap.empty;
-         } in *)
+    let compile_loop_code env offset expr_text_code body_text_code =
+      let loop_label = unique_label env "loop" in
+      let end_label = unique_label env "end" in
+      let do_jump = unique_label env "do_jump" in
+      expr_text_code
+      ++ movq !%rax !%rdi
+      ++ movq (ind ~ofs:byte rax) !%rcx
+      ++ addq (imm (2 * byte)) !%rdi
+      ++ movq !%rdi !%rsi
+      ++ movq (ind rdi) !%r10
+      ++ movq !%r10 (ind ~ofs:offset rbp)
+      ++ jmp do_jump
+      ++ label loop_label
+      ++ testq !%rcx !%rcx
+      ++ jz end_label
+      ++ addq (imm byte) !%rsi
+      ++ movq (ind rsi) !%r10
+      ++ movq !%r10 (ind ~ofs:offset rbp)
+      ++ label do_jump
+      ++ testq !%rcx !%rcx
+      ++ jz end_label
+      ++ pushq !%rcx
+      ++ pushq !%rdi
+      ++ pushq !%rsi
+      ++ body_text_code
+      ++ popq rsi
+      ++ popq rdi
+      ++ popq rcx
+      ++ decq !%rcx
+      ++ jmp loop_label
+      ++ label end_label
+    in
     (try
-       let found_var, found_ofs = StringMap.find var.v_name env.vars in
+       (* Case: var already in env. *)
+       let _, found_ofs = StringMap.find var.v_name env.vars in
        let body_text_code, body_data_code = compile_stmt env parent_env body in
-       let loop_label = unique_label env "loop" in
-       let end_label = unique_label env "end" in
-       let do_jump = unique_label env "do_jump" in
-       ( expr_text_code
-         ++ movq !%rax !%rdi
-         ++ movq (ind ~ofs:byte rax) !%rcx
-         ++ addq (imm (2 * byte)) !%rdi
-         ++ movq !%rdi !%rsi
-         ++ movq (ind rdi) !%r10
-         ++ movq !%r10 (ind ~ofs:found_ofs rbp)
-         ++ jmp do_jump
-         ++ label loop_label
-         ++ testq !%rcx !%rcx
-         ++ jz end_label
-         ++ addq (imm byte) !%rsi
-         ++ movq (ind rsi) !%r10
-         ++ movq !%r10 (ind ~ofs:found_ofs rbp)
-         ++ label do_jump
-         ++ testq !%rcx !%rcx
-         ++ jz end_label
-         ++ pushq !%rcx
-         ++ pushq !%rdi
-         ++ pushq !%rsi
-         ++ body_text_code
-         ++ popq rsi
-         ++ popq rdi
-         ++ popq rcx
-         ++ decq !%rcx
-         ++ jmp loop_label
-         ++ label end_label
-       , expr_data_code ++ body_data_code )
+       let loop_code = compile_loop_code env found_ofs expr_text_code body_text_code in
+       loop_code, expr_data_code ++ body_data_code
      with
      | Not_found ->
+       (* Case: var not in env, must allocate new stack offset. *)
        env.stack_offset <- env.stack_offset - byte;
        env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
        let item_ofs = env.stack_offset in
        let body_text_code, body_data_code = compile_stmt env parent_env body in
-       let loop_label = unique_label env "loop" in
-       let end_label = unique_label env "end" in
-       let do_jump = unique_label env "do_jump" in
-       ( expr_text_code
-         ++ movq !%rax !%rdi
-         ++ movq (ind ~ofs:byte rax) !%rcx
-         ++ addq (imm (2 * byte)) !%rdi
-         ++ movq !%rdi !%rsi
-         ++ movq (ind rdi) !%r10
-         ++ movq !%r10 (ind ~ofs:item_ofs rbp)
-         ++ jmp do_jump
-         ++ label loop_label
-         ++ testq !%rcx !%rcx
-         ++ jz end_label
-         ++ addq (imm byte) !%rsi
-         ++ movq (ind rsi) !%r10
-         ++ movq !%r10 (ind ~ofs:item_ofs rbp)
-         ++ label do_jump
-         ++ testq !%rcx !%rcx
-         ++ jz end_label
-         ++ pushq !%rcx
-         ++ pushq !%rdi
-         ++ pushq !%rsi
-         ++ body_text_code
-         ++ popq rsi
-         ++ popq rdi
-         ++ popq rcx
-         ++ decq !%rcx
-         ++ jmp loop_label
-         ++ label end_label
-       , expr_data_code ++ body_data_code ))
+       let loop_code = compile_loop_code env item_ofs expr_text_code body_text_code in
+       loop_code, expr_data_code ++ body_data_code)
   | TSeval expr ->
     let text_code, data_code = compile_expr env parent_env expr in
     text_code, data_code
@@ -515,13 +485,7 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
 ;;
 
 let compile_def env ((fn, body) : Ast.tdef) : X86_64.text * X86_64.data =
-  let env_global =
-    { vars = StringMap.empty
-    ; funcs = StringMap.empty
-    ; stack_offset = 0
-    ; counters = StringMap.empty
-    }
-  in
+  let env_global = create_env () in
   let body_code, data_code = compile_stmt env env_global body in
   let prologue = pushq !%rbp ++ movq !%rsp !%rbp ++ addq (imm env.stack_offset) !%rsp in
   let epilogue =
@@ -536,13 +500,13 @@ let compile_def env ((fn, body) : Ast.tdef) : X86_64.text * X86_64.data =
 
 let file ?debug:(b = false) (p : Ast.tfile) : X86_64.program =
   debug := b;
-  let env = empty_env in
+  let env = create_env () in
   let text_fn, data_fn = func env in
   let text_code, data_code =
     List.fold_left
       (fun (text_acc, data_acc) (fn, body) ->
-        let fn_code, data_code = compile_def env (fn, body) in
-        text_acc ++ fn_code, data_acc ++ data_code)
+        let text_fn, data_fn = compile_def env (fn, body) in
+        text_acc ++ text_fn, data_acc ++ data_fn)
       (nop, nop)
       p
   in
