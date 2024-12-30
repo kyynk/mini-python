@@ -74,10 +74,7 @@ and file = def list * stmt
 
 (** In the typed trees, all the occurrences of the same variable
     point to a single record of the following type. *)
-type var =
-  { v_name : string
-  ; mutable v_ofs : int (** position wrt %rbp *)
-  }
+type var = { v_name : string }
 
 (** Similarly, all the occurrences of a given function all point
     to a single record of the following type. *)

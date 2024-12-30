@@ -169,7 +169,7 @@ let rec type_stmt (env : env_t) (stmt : Ast.stmt) : Ast.tstmt * env_t =
     (match StringMap.find id.id env.vars with
      | v -> TSassign (v, te), env
      | exception Not_found ->
-       let v = { v_name = id.id; v_ofs = 0 } in
+       let v = { v_name = id.id } in
        let env = { env with vars = StringMap.add id.id v env.vars } in
        TSassign (v, te), env)
   | Sprint e ->
@@ -188,7 +188,7 @@ let rec type_stmt (env : env_t) (stmt : Ast.stmt) : Ast.tstmt * env_t =
     TSblock stmts', env
   | Sfor (id, e, body) ->
     let te, env = type_expr env e in
-    let v = { v_name = id.id; v_ofs = 0 } in
+    let v = { v_name = id.id } in
     let env = { env with vars = StringMap.add id.id v env.vars } in
     let tbody, env = type_stmt env body in
     TSfor (v, te, tbody), env
@@ -203,7 +203,7 @@ let rec type_stmt (env : env_t) (stmt : Ast.stmt) : Ast.tstmt * env_t =
 ;;
 
 let type_def (env : env_t) ((fn_name, fn_params, body) : Ast.def) : Ast.tdef * env_t =
-  let fn_params_vars = List.map (fun id -> { v_name = id.id; v_ofs = 0 }) fn_params in
+  let fn_params_vars = List.map (fun id -> { v_name = id.id }) fn_params in
   if List.length fn_params_vars
      <> List.length
           (List.sort_uniq
