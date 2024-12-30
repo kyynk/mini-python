@@ -8,7 +8,7 @@ type env_t =
   ; mutable counters : int StringMap.t
   }
 
-let empty_env =
+let create_env () =
   { vars = StringMap.empty
   ; funcs = StringMap.empty
   ; stack_offset = 0
