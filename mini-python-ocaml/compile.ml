@@ -442,7 +442,6 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       let loop_label = unique_label env "loop" in
       let end_label = unique_label env "end" in
       let do_jump = unique_label env "do_jump" in 
-      comment "for loop" ++
       expr_text_code ++
       
       movq !%rax !%rdi ++
@@ -466,9 +465,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       pushq !%rcx ++
       pushq !%rdi ++
       pushq !%rsi ++
-      comment "body" ++
       body_text_code ++
-      comment "end body" ++
       popq rsi ++
       popq rdi ++
       popq rcx ++
@@ -485,7 +482,6 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       let loop_label = unique_label env "loop" in
       let end_label = unique_label env "end" in
       let do_jump = unique_label env "do_jump" in 
-      comment "for loop not found" ++
       expr_text_code ++
       movq !%rax !%rdi ++
       movq (ind ~ofs:byte rax) !%rcx ++
@@ -508,9 +504,7 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
       pushq !%rcx ++
       pushq !%rdi ++
       pushq !%rsi ++
-      comment "body" ++
       body_text_code ++
-      comment "end body" ++
       popq rsi ++
       popq rdi ++
       popq rcx ++
@@ -537,7 +531,6 @@ let rec compile_stmt (env: env_t) (parent_env:env_t) (stmt: Ast.tstmt) : X86_64.
     movq !%rax !%rdi ++
     pushq !%rdi ++
     text_code3 ++
-    comment "set" ++
     popq rdi ++
     movq !%rax (ind rdi)
     , data_code1 ++ data_code2
@@ -573,14 +566,10 @@ let file ?debug:(b=false) (p: Ast.tfile) : X86_64.program =
     let fn_code, data_code = compile_def env (fn, body) in
     (text_acc ++ fn_code, data_acc ++ data_code)
   ) (nop, nop) p in
+  let csfw = [ "malloc"; "putchar"; "printf"; "strcmp"; "strcpy"; "strcat" ] in
   { 
-    text = 
-      c_standard_function_wrapper "malloc" ++
-      c_standard_function_wrapper "putchar" ++
-      c_standard_function_wrapper "printf" ++
-      c_standard_function_wrapper "strcmp" ++
-      c_standard_function_wrapper "strcpy" ++
-      c_standard_function_wrapper "strcat" ++
+    text =
+      List.fold_left (fun acc fn -> acc ++ c_standard_function_wrapper fn) nop csfw ++
       text_fn ++
       globl "main" ++ text_code;
     data = 
