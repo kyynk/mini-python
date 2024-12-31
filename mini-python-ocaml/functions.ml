@@ -252,16 +252,13 @@ let func env : X86_64.text * X86_64.data =
     ++ movq (ind rsi) !%r10
     ++ cmpq (imm 4) !%r10
     ++ jne "runtime_error"
-    ++ (* malloc new list *)
-    pushq !%rdi
+    ++ pushq !%rdi
     ++ movq (ind ~ofs:byte rdi) !%rdi
     ++ pushq !%rsi
     ++ movq (ind ~ofs:byte rsi) !%rsi
     ++ movq !%rdi !%rcx
-    ++ (* length of first list *)
-    movq !%rsi !%r9
-    ++ (* length of second list *)
-    addq !%rsi !%rdi
+    ++ movq !%rsi !%r9
+    ++ addq !%rsi !%rdi
     ++ addq (imm 2) !%rdi
     ++ imulq (imm byte) !%rdi
     ++ pushq !%rcx
@@ -313,8 +310,8 @@ let func env : X86_64.text * X86_64.data =
     ++ movq !%r8 (ind rdx)
     ++ decq !%rcx
     ++ addq (imm byte) !%rdx
-    ++ jmp func_list_concat_second_loop
     ++ addq (imm byte) !%rdi
+    ++ jmp func_list_concat_second_loop
     ++ label func_list_concat_end
     ++ leave
     ++ ret
