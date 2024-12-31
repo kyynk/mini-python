@@ -4,11 +4,11 @@ open Utils
 open Const
 
 let func_print_list_save_reg : X86_64.text =
-  pushq !%rsi ++ pushq !%rdi ++ pushq !%rcx ++ pushq !%r8
+  pushq !%rsi ++ pushq !%rdi ++ pushq !%rcx ++ pushq !%r8 ++ pushq !%rdx
 ;;
 
 let func_print_list_restore_reg : X86_64.text =
-  popq r8 ++ popq rcx ++ popq rdi ++ popq rsi
+  popq rdx ++ popq r8 ++ popq rcx ++ popq rdi ++ popq rsi
 ;;
 
 let copy_value_store_reg : X86_64.text =
@@ -18,6 +18,12 @@ let copy_value_store_reg : X86_64.text =
 let copy_value_restore_reg : X86_64.text =
   popq r9 ++ popq rdx ++ popq rsi ++ popq rdi ++ popq rax ++ popq rcx
 ;;
+
+let concat_list_store_reg : X86_64.text =
+  pushq !%rcx ++ pushq !%rdi ++ pushq !%rsi ++ pushq !%rdx
+;;
+
+let concat_list_restore_reg : X86_64.text = popq rdx ++ popq rsi ++ popq rdi ++ popq rcx
 
 let func_list_save_reg : X86_64.text =
   pushq !%r8 ++ pushq !%rsi ++ pushq !%rcx ++ pushq !%rax
@@ -72,16 +78,16 @@ let func env : X86_64.text * X86_64.data =
     ++ cmpq (imm 4) !%r10
     ++ jne "runtime_error"
     ++ movq (imm 1) !%r11
-    ++ movq (ind ~ofs:byte rdi) !%rcx
-    ++ addq (imm (2 * byte)) !%rdi
-    ++ movq !%rdi !%rsi
+    ++ movq (ind ~ofs:byte rdi) !%rdx
+    ++ xorq !%rcx !%rcx
+    ++ movq !%rcx !%rsi
     ++ func_print_list_save_reg
     ++ put_character '['
     ++ func_print_list_restore_reg
     ++ label print_list
-    ++ testq !%rcx !%rcx
-    ++ jz print_list_end
-    ++ cmpq !%rdi !%rsi
+    ++ cmpq !%rcx !%rdx
+    ++ je print_list_end
+    ++ cmpq !%rcx !%rsi
     ++ je print_list_first_time
     ++ func_print_list_save_reg
     ++ put_character ','
@@ -89,11 +95,10 @@ let func env : X86_64.text * X86_64.data =
     ++ func_print_list_restore_reg
     ++ label print_list_first_time
     ++ func_print_list_save_reg
-    ++ movq (ind rdi) !%rdi
+    ++ movq (ind ~ofs:(2 * byte) ~index:rcx ~scale:byte rdi) !%rdi
     ++ call "print_value"
     ++ func_print_list_restore_reg
-    ++ decq !%rcx
-    ++ addq (imm byte) !%rdi
+    ++ incq !%rcx
     ++ jmp print_list
     ++ label print_none
     ++ leaq (lab "none_string") rdi
@@ -215,13 +220,7 @@ let func env : X86_64.text * X86_64.data =
     ++ movq !%rax !%rsi
     ++ addq (imm (2 * byte)) !%rsi
     ++ addq (imm (2 * byte)) !%rdi
-    ++ (*
-          rdi : current pointer to elements in original list
-          rsi : current pointer to elements in copied list
-          rax : pointer to copied list with tag and length copied
-          rcx : length of list to be copied
-       *)
-    label copy_list_loop
+    ++ label copy_list_loop
     ++ testq !%rcx !%rcx
     ++ jz copy_end
     ++ copy_value_store_reg
@@ -246,73 +245,54 @@ let func env : X86_64.text * X86_64.data =
     ++ label "concat_list"
     ++ pushq !%rbp
     ++ movq !%rsp !%rbp
-    ++ movq (ind rdi) !%r10
-    ++ cmpq (imm 4) !%r10
+    ++ cmpq (imm 4) (ind rdi)
     ++ jne "runtime_error"
-    ++ movq (ind rsi) !%r10
-    ++ cmpq (imm 4) !%r10
+    ++ cmpq (imm 4) (ind rsi)
     ++ jne "runtime_error"
     ++ pushq !%rdi
     ++ movq (ind ~ofs:byte rdi) !%rdi
     ++ pushq !%rsi
-    ++ movq (ind ~ofs:byte rsi) !%rsi
-    ++ movq !%rdi !%rcx
-    ++ movq !%rsi !%r9
-    ++ addq !%rsi !%rdi
+    ++ addq (ind ~ofs:byte rsi) !%rdi
     ++ addq (imm 2) !%rdi
     ++ imulq (imm byte) !%rdi
-    ++ pushq !%rcx
-    ++ pushq !%r9
     ++ call "malloc_wrapper"
-    ++ popq r9
-    ++ popq rcx
     ++ popq rsi
     ++ popq rdi
     ++ movq (imm 4) (ind rax)
-    ++ movq !%rcx !%r10
-    ++ addq !%r9 !%r10
+    ++ movq (ind ~ofs:byte rdi) !%r10
+    ++ addq (ind ~ofs:byte rsi) !%r10
     ++ movq !%r10 (ind ~ofs:byte rax)
-    ++ addq (imm (2 * byte)) !%rsi
     ++ pushq !%rsi
     ++ movq !%rax !%rdx
-    ++ addq (imm (2 * byte)) !%rdx
-    ++ addq (imm (2 * byte)) !%rdi
-    ++ (*
-          rdi : current pointer to elements in original list
-          rdx : current pointer to elements in copied list
-          rax : pointer to copied list with tag and length copied
-          rcx : length of list to be copied
-       *)
-    label func_list_concat_first_loop
-    ++ testq !%rcx !%rcx
-    ++ jz func_list_concat_next_list
-    ++ copy_value_store_reg
-    ++ movq (ind rdi) !%rdi
+    ++ xorq !%rcx !%rcx
+    ++ label func_list_concat_first_loop
+    ++ cmpq !%rcx (ind ~ofs:byte rsi)
+    ++ comment "first_list_cmp"
+    ++ je func_list_concat_next_list
+    ++ concat_list_store_reg
+    ++ movq (ind ~ofs:(2 * byte) ~index:rcx ~scale:byte rdi) !%rdi
     ++ call "copy_value"
-    ++ movq !%rax !%r8
-    ++ copy_value_restore_reg
-    ++ movq !%r8 (ind rdx)
-    ++ decq !%rcx
-    ++ addq (imm byte) !%rdx
-    ++ addq (imm byte) !%rdi
+    ++ concat_list_restore_reg
+    ++ movq !%rax (ind ~ofs:(2 * byte) ~index:rcx ~scale:byte rdx)
+    ++ incq !%rcx
     ++ jmp func_list_concat_first_loop
     ++ label func_list_concat_next_list
-    ++ movq !%r9 !%rcx
-    ++ popq rdi
+    ++ popq rsi
+    ++ xorq !%rcx !%rcx
     ++ label func_list_concat_second_loop
-    ++ testq !%rcx !%rcx
-    ++ jz func_list_concat_end
-    ++ copy_value_store_reg
-    ++ movq (ind rdi) !%rdi
+    ++ cmpq !%rcx (ind ~ofs:byte rsi)
+    ++ je func_list_concat_end
+    ++ concat_list_store_reg
+    ++ movq (ind ~ofs:(2 * byte) ~index:rcx ~scale:byte rsi) !%rdi
     ++ call "copy_value"
-    ++ movq !%rax !%r8
-    ++ copy_value_restore_reg
-    ++ movq !%r8 (ind rdx)
-    ++ decq !%rcx
-    ++ addq (imm byte) !%rdx
-    ++ addq (imm byte) !%rdi
+    ++ concat_list_restore_reg
+    ++ movq (ind ~ofs:byte rdi) !%r10
+    ++ addq !%rcx !%r10
+    ++ movq !%rax (ind ~ofs:(2 * byte) ~index:r10 ~scale:byte rdx)
+    ++ incq !%rcx
     ++ jmp func_list_concat_second_loop
     ++ label func_list_concat_end
+    ++ movq !%rdx !%rax
     ++ leave
     ++ ret
     ++ label func_len
@@ -326,10 +306,9 @@ let func env : X86_64.text * X86_64.data =
     ++ movq !%r8 (ind ~ofs:byte rax)
     ++ ret
     ++ label func_list
-    ++ movq (ind rax) !%r10
-    ++ cmpq (imm 5) !%r10
+    ++ cmpq (imm 5) (ind rdi)
     ++ jne "runtime_error"
-    ++ movq (ind ~ofs:byte rax) !%rsi
+    ++ movq (ind ~ofs:byte rdi) !%rsi
     ++ (*
           rsi: the value
           rcx: counter
@@ -340,15 +319,11 @@ let func env : X86_64.text * X86_64.data =
     movq !%rsi !%rdi
     ++ addq (imm 2) !%rdi
     ++ imulq (imm byte) !%rdi
-    ++ pushq !%rax
     ++ pushq !%rsi
     ++ call "malloc_wrapper"
     ++ popq rsi
-    ++ popq rax
     ++ movq (imm 4) (ind rax)
     ++ movq !%rsi (ind ~ofs:byte rax)
-    ++ movq !%rax !%r8
-    ++ addq (imm (2 * byte)) !%r8
     ++ xorq !%rcx !%rcx
     ++ label func_list_loop
     ++ cmpq !%rcx !%rsi
@@ -360,9 +335,8 @@ let func env : X86_64.text * X86_64.data =
     ++ func_list_restore_reg
     ++ movq (imm 2) (ind r10)
     ++ movq !%rcx (ind ~ofs:byte r10)
-    ++ movq !%r10 (ind r8)
+    ++ movq !%r10 (ind ~ofs:(2 * byte) ~index:rcx ~scale:byte rax)
     ++ incq !%rcx
-    ++ addq (imm byte) !%r8
     ++ jmp func_list_loop
     ++ label func_list_end
     ++ ret

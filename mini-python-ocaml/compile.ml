@@ -320,7 +320,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
        if List.length args = 1
        then (
          let text_code, data_code = compile_expr env parent_env (List.hd args) in
-         text_code ++ call "func_list", data_code)
+         text_code ++ movq !%rax !%rdi ++ call "func_list", data_code)
        else failwith "list function takes exactly one argument"
      | _ -> failwith "Unsupported function call")
   | TElist l ->
