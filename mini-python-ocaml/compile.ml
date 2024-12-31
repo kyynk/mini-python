@@ -45,7 +45,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
   | TEvar v ->
     (try
        let ofs = StringMap.find v.v_name env.vars in
-       movq (ind ~ofs:(ofs + parent_env.stack_offset) rbp) !%rax, nop
+       movq (ind ~ofs:(-ofs - parent_env.stack_offset) rbp) !%rax, nop
      with
      | Not_found ->
        failwith (Printf.sprintf "Variable %s not found in environment" v.v_name))
@@ -327,12 +327,13 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
          text_code ++ movq !%rax !%rdi ++ call "func_list", data_code)
        else failwith "list function takes exactly one argument"
      | _ ->
-       (* List.fold_left
+       List.fold_left
          (fun (text_acc, data_acc) arg ->
            let text_expr, data_expr = compile_expr env parent_env arg in
-           text_acc ++ text_expr ++ pushq !%rax, data_acc ++ data_expr )
-              *)
-       failwith "Unsupported function call")
+           text_acc ++ text_expr ++ pushq !%rax, data_acc ++ data_expr)
+         (nop, nop)
+         (List.rev args)
+       |> fun (var_text, var_data) -> var_text ++ call fn.fn_name, var_data)
   | TElist l ->
     let len = List.length l in
     List.fold_left
@@ -405,14 +406,14 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
     (try
        let offset = StringMap.find var.v_name env.vars in
        let text_code, data_code = compile_expr env parent_env expr in
-       text_code ++ movq !%rax (ind ~ofs:offset rbp), data_code
+       text_code ++ movq !%rax (ind ~ofs:(-offset) rbp), data_code
      with
      | Not_found ->
-       env.stack_offset <- env.stack_offset - byte;
+       env.stack_offset <- env.stack_offset + byte;
        let offset = env.stack_offset in
        let text_code, data_code = compile_expr env parent_env expr in
        env.vars <- StringMap.add var.v_name offset env.vars;
-       text_code ++ movq !%rax (ind ~ofs:offset rbp), data_code)
+       text_code ++ movq !%rax (ind ~ofs:(-offset) rbp), data_code)
   | TSprint expr ->
     let text_code, data_code = compile_expr env parent_env expr in
     text_code ++ movq !%rax !%rdi ++ call "print_value" ++ put_character '\n', data_code
@@ -435,14 +436,14 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
       ++ addq (imm (2 * byte)) !%rdi
       ++ movq !%rdi !%rsi
       ++ movq (ind rdi) !%r10
-      ++ movq !%r10 (ind ~ofs:offset rbp)
+      ++ movq !%r10 (ind ~ofs:(-offset) rbp)
       ++ jmp do_jump
       ++ label loop_label
       ++ testq !%rcx !%rcx
       ++ jz end_label
       ++ addq (imm byte) !%rsi
       ++ movq (ind rsi) !%r10
-      ++ movq !%r10 (ind ~ofs:offset rbp)
+      ++ movq !%r10 (ind ~ofs:(-offset) rbp)
       ++ label do_jump
       ++ testq !%rcx !%rcx
       ++ jz end_label
@@ -466,7 +467,7 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
      with
      | Not_found ->
        (* Case: var not in env, must allocate new stack offset. *)
-       env.stack_offset <- env.stack_offset - byte;
+       env.stack_offset <- env.stack_offset + byte;
        env.vars <- StringMap.add var.v_name env.stack_offset env.vars;
        let item_ofs = env.stack_offset in
        let body_text_code, body_data_code = compile_stmt env parent_env body in
@@ -495,20 +496,21 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
 ;;
 
 let compile_def env parent_env ((fn, body) : Ast.tdef) : X86_64.text * X86_64.data =
-  let body_code, data_code = compile_stmt env parent_env body in
   (* add vars in env *)
   List.fold_left
-    (fun (offset, vars) var ->
-      let new_offset = offset - byte in
-      new_offset, StringMap.add var.v_name new_offset vars)
-    (env.stack_offset, env.vars)
+    (fun (offset, n_offset, vars) var ->
+      let new_offset = offset + byte in
+      let new_n_offset = n_offset - byte in
+      new_offset, new_n_offset, StringMap.add var.v_name (new_n_offset - byte) vars)
+    (env.stack_offset, 0, env.vars)
     fn.fn_params
-  |> fun (stack_offsets, updated_vars) ->
+  |> fun (stack_offsets, _, updated_vars) ->
   env.stack_offset <- stack_offsets;
   env.vars <- updated_vars;
-  let prologue = pushq !%rbp ++ movq !%rsp !%rbp ++ addq (imm env.stack_offset) !%rsp in
+  let body_code, data_code = compile_stmt env parent_env body in
+  let prologue = pushq !%rbp ++ movq !%rsp !%rbp ++ subq (imm env.stack_offset) !%rsp in
   let epilogue =
-    subq (imm env.stack_offset) !%rsp
+    addq (imm env.stack_offset) !%rsp
     ++ xorq !%rax !%rax
     ++ movq !%rbp !%rsp
     ++ popq rbp
