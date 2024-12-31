@@ -1,8 +1,10 @@
 open Ast
 module StringMap = Map.Make (String)
 
+type offset = int
+
 type env_t =
-  { mutable vars : (var * int) StringMap.t
+  { mutable vars : offset StringMap.t
   ; funcs : fn StringMap.t
   ; mutable stack_offset : int
   ; mutable counters : int StringMap.t

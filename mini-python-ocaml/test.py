@@ -26,7 +26,7 @@
 # i = [1,[2,["hrt",[True,[-5]]]]]
 # print(i[1][0])
 # print(i+i)
-# # # # print(1 < 2 and len(1))
+# # # print(1 < 2 and len(1))
 
 # print([] + [])
 # print([1,2] + [3,4,5])
@@ -142,10 +142,16 @@
 # x = 1
 # print([x,x,x] == [x,[x],x])
 
-l = [1,2,3]
+# l = [1,2,3]
+# def f(t):
+#     print(t)
+# f(1)
+# note
+# compile_def
+
+l = [4,5,6,5]
 for x in l:
     l = []
     print(x)
     a = 12
 print(l)
-print(a)

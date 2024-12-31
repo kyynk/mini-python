@@ -34,7 +34,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
        , nop )
      | Cstring s ->
        let len = String.length s in
-       let string_label = unique_label env "string" in
+       let string_label = unique_label parent_env "string" in
        ( movq (imm (3 * byte)) !%rdi
          ++ call "malloc_wrapper"
          ++ movq (imm 3) (ind rax)
@@ -43,14 +43,18 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
          ++ movq !%rdi (ind ~ofs:(2 * byte) rax)
        , label string_label ++ string s ))
   | TEvar v ->
-    let var, ofs = StringMap.find v.v_name env.vars in
-    movq (ind ~ofs:(ofs + parent_env.stack_offset) rbp) !%rax, nop
+    (try
+       let ofs = StringMap.find v.v_name env.vars in
+       movq (ind ~ofs:(ofs + parent_env.stack_offset) rbp) !%rax, nop
+     with
+     | Not_found ->
+       failwith (Printf.sprintf "Variable %s not found in environment" v.v_name))
   | TEbinop (op, e1, e2) ->
     (match op with
      | Band ->
        let text_code1, data_code1 = compile_expr env parent_env e1 in
        let text_code2, data_code2 = compile_expr env parent_env e2 in
-       let l = unique_label env "cond_false" in
+       let l = unique_label parent_env "cond_false" in
        ( text_code1
          ++ movq (ind ~ofs:byte rax) !%rdi
          ++ cmpq (imm 0) !%rdi
@@ -61,7 +65,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
      | Bor ->
        let text_code1, data_code1 = compile_expr env parent_env e1 in
        let text_code2, data_code2 = compile_expr env parent_env e2 in
-       let l = unique_label env "cond_true" in
+       let l = unique_label parent_env "cond_true" in
        ( text_code1
          ++ movq (ind ~ofs:byte rax) !%rdi
          ++ cmpq (imm 0) !%rdi
@@ -74,9 +78,9 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
        let text_code2, data_code2 = compile_expr env parent_env e2 in
        (match op with
         | Badd ->
-          let end_label = unique_label env "end_label" in
-          let int_label = unique_label env "int" in
-          let string_label = unique_label env "string" in
+          let end_label = unique_label parent_env "end_label" in
+          let int_label = unique_label parent_env "int" in
+          let string_label = unique_label parent_env "string" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -168,8 +172,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
                ++ movq !%rdx !%rdi)
           , data_code1 ++ data_code2 )
         | Beq ->
-          let beq = unique_label env "beq_false" in
-          let beq_end = unique_label env "beq_end" in
+          let beq = unique_label parent_env "beq_false" in
+          let beq_end = unique_label parent_env "beq_end" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -186,8 +190,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ label beq_end
           , data_code1 ++ data_code2 )
         | Bneq ->
-          let beq = unique_label env "beq_false" in
-          let beq_end = unique_label env "beq_end" in
+          let beq = unique_label parent_env "beq_false" in
+          let beq_end = unique_label parent_env "beq_end" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -204,8 +208,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ label beq_end
           , data_code1 ++ data_code2 )
         | Blt ->
-          let blt = unique_label env "blt_false" in
-          let blt_end = unique_label env "blt_end" in
+          let blt = unique_label parent_env "blt_false" in
+          let blt_end = unique_label parent_env "blt_end" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -222,8 +226,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ label blt_end
           , data_code1 ++ data_code2 )
         | Ble ->
-          let ble = unique_label env "ble_false" in
-          let ble_end = unique_label env "ble_end" in
+          let ble = unique_label parent_env "ble_false" in
+          let ble_end = unique_label parent_env "ble_end" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -240,8 +244,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ label ble_end
           , data_code1 ++ data_code2 )
         | Bgt ->
-          let bgt = unique_label env "bgt_false" in
-          let bgt_end = unique_label env "bgt_end" in
+          let bgt = unique_label parent_env "bgt_false" in
+          let bgt_end = unique_label parent_env "bgt_end" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -258,8 +262,8 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ label bgt_end
           , data_code1 ++ data_code2 )
         | Bge ->
-          let bge = unique_label env "bge_false" in
-          let bge_end = unique_label env "bge_end" in
+          let bge = unique_label parent_env "bge_false" in
+          let bge_end = unique_label parent_env "bge_end" in
           ( text_code1
             ++ movq !%rax !%rdi
             ++ pushq !%rdi
@@ -322,7 +326,13 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
          let text_code, data_code = compile_expr env parent_env (List.hd args) in
          text_code ++ movq !%rax !%rdi ++ call "func_list", data_code)
        else failwith "list function takes exactly one argument"
-     | _ -> failwith "Unsupported function call")
+     | _ ->
+       (* List.fold_left
+         (fun (text_acc, data_acc) arg ->
+           let text_expr, data_expr = compile_expr env parent_env arg in
+           text_acc ++ text_expr ++ pushq !%rax, data_acc ++ data_expr )
+              *)
+       failwith "Unsupported function call")
   | TElist l ->
     let len = List.length l in
     List.fold_left
@@ -379,8 +389,8 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
     let text_code_cond, data_code_cond = compile_expr env parent_env cond in
     let text_code_s1, data_code_s1 = compile_stmt env parent_env s1 in
     let text_code_s2, data_code_s2 = compile_stmt env parent_env s2 in
-    let else_label = unique_label env "else" in
-    let end_label = unique_label env "end" in
+    let else_label = unique_label parent_env "else" in
+    let end_label = unique_label parent_env "end" in
     ( text_code_cond
       ++ cmpq (imm 0) (ind ~ofs:byte rax)
       ++ je else_label
@@ -393,15 +403,16 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
   | TSreturn expr -> failwith "Unsupported Sreturn"
   | TSassign (var, expr) ->
     (try
-       let var, ofs = StringMap.find var.v_name env.vars in
+       let offset = StringMap.find var.v_name env.vars in
        let text_code, data_code = compile_expr env parent_env expr in
-       text_code ++ movq !%rax (ind ~ofs rbp), data_code
+       text_code ++ movq !%rax (ind ~ofs:offset rbp), data_code
      with
      | Not_found ->
        env.stack_offset <- env.stack_offset - byte;
+       let offset = env.stack_offset in
        let text_code, data_code = compile_expr env parent_env expr in
-       env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
-       text_code ++ movq !%rax (ind ~ofs:env.stack_offset rbp), data_code)
+       env.vars <- StringMap.add var.v_name offset env.vars;
+       text_code ++ movq !%rax (ind ~ofs:offset rbp), data_code)
   | TSprint expr ->
     let text_code, data_code = compile_expr env parent_env expr in
     text_code ++ movq !%rax !%rdi ++ call "print_value" ++ put_character '\n', data_code
@@ -412,13 +423,12 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
         acc_text ++ text_code, acc_data ++ data_code)
       (nop, nop)
       stmts
-    |> fun (text_code, data_code) -> text_code, data_code
   | TSfor (var, expr, body) ->
     let expr_text_code, expr_data_code = compile_expr env parent_env expr in
     let compile_loop_code env offset expr_text_code body_text_code =
-      let loop_label = unique_label env "loop" in
-      let end_label = unique_label env "end" in
-      let do_jump = unique_label env "do_jump" in
+      let loop_label = unique_label parent_env "loop" in
+      let end_label = unique_label parent_env "end" in
+      let do_jump = unique_label parent_env "do_jump" in
       expr_text_code
       ++ movq !%rax !%rdi
       ++ movq (ind ~ofs:byte rax) !%rcx
@@ -449,7 +459,7 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
     in
     (try
        (* Case: var already in env. *)
-       let _, found_ofs = StringMap.find var.v_name env.vars in
+       let found_ofs = StringMap.find var.v_name env.vars in
        let body_text_code, body_data_code = compile_stmt env parent_env body in
        let loop_code = compile_loop_code env found_ofs expr_text_code body_text_code in
        loop_code, expr_data_code ++ body_data_code
@@ -457,7 +467,7 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
      | Not_found ->
        (* Case: var not in env, must allocate new stack offset. *)
        env.stack_offset <- env.stack_offset - byte;
-       env.vars <- StringMap.add var.v_name (var, env.stack_offset) env.vars;
+       env.vars <- StringMap.add var.v_name env.stack_offset env.vars;
        let item_ofs = env.stack_offset in
        let body_text_code, body_data_code = compile_stmt env parent_env body in
        let loop_code = compile_loop_code env item_ofs expr_text_code body_text_code in
@@ -484,9 +494,18 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
     , data_code1 ++ data_code2 )
 ;;
 
-let compile_def env ((fn, body) : Ast.tdef) : X86_64.text * X86_64.data =
-  let env_global = create_env () in
-  let body_code, data_code = compile_stmt env env_global body in
+let compile_def env parent_env ((fn, body) : Ast.tdef) : X86_64.text * X86_64.data =
+  let body_code, data_code = compile_stmt env parent_env body in
+  (* add vars in env *)
+  List.fold_left
+    (fun (offset, vars) var ->
+      let new_offset = offset - byte in
+      new_offset, StringMap.add var.v_name new_offset vars)
+    (env.stack_offset, env.vars)
+    fn.fn_params
+  |> fun (stack_offsets, updated_vars) ->
+  env.stack_offset <- stack_offsets;
+  env.vars <- updated_vars;
   let prologue = pushq !%rbp ++ movq !%rsp !%rbp ++ addq (imm env.stack_offset) !%rsp in
   let epilogue =
     subq (imm env.stack_offset) !%rsp
@@ -500,12 +519,13 @@ let compile_def env ((fn, body) : Ast.tdef) : X86_64.text * X86_64.data =
 
 let file ?debug:(b = false) (p : Ast.tfile) : X86_64.program =
   debug := b;
-  let env = create_env () in
-  let text_fn, data_fn = func env in
+  let global_env = create_env () in
+  let text_fn, data_fn = func global_env in
   let text_code, data_code =
     List.fold_left
       (fun (text_acc, data_acc) (fn, body) ->
-        let text_fn, data_fn = compile_def env (fn, body) in
+        let env = create_env () in
+        let text_fn, data_fn = compile_def env global_env (fn, body) in
         text_acc ++ text_fn, data_acc ++ data_fn)
       (nop, nop)
       p
