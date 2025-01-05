@@ -25,10 +25,10 @@ let repeat (n : int) (text : X86_64.text) : X86_64.text =
 
 let main_guard (function_name : string) : label =
   match function_name with
-  | "main" -> 
-    "💥main"
+  | "main" -> "💥main"
   | _ -> function_name
-  
+;;
+
 let arith_asm (code1 : X86_64.text) (code2 : X86_64.text) (instructions : X86_64.text)
   : X86_64.text
   =

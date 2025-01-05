@@ -291,7 +291,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
          ++ movq (ind ~ofs:byte rax) !%rdi
          ++ negq !%rdi
          ++ pushq !%rdi
-         ++ movq (imm (2*byte)) !%rdi
+         ++ movq (imm (2 * byte)) !%rdi
          ++ call "malloc_wrapper"
          ++ popq rdi
          ++ movq (imm 2) (ind rax)
@@ -306,7 +306,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
          ++ movq (ind ~ofs:byte rax) !%rdi
          ++ xorq (imm 1) !%rdi
          ++ pushq !%rdi
-         ++ movq (imm (2*byte)) !%rdi
+         ++ movq (imm (2 * byte)) !%rdi
          ++ call "malloc_wrapper"
          ++ popq rdi
          ++ movq (imm 1) (ind rax)
@@ -438,7 +438,6 @@ let rec compile_stmt (env : env_t) (parent_env : env_t) (stmt : Ast.tstmt)
       let loop_label = unique_label parent_env "for_loop" in
       let end_label = unique_label parent_env "for_end" in
       let do_jump = unique_label parent_env "for_do_jump" in
-
       expr_text_code
       ++ movq !%rax !%rdi
       ++ movq (ind ~ofs:byte rax) !%rcx
