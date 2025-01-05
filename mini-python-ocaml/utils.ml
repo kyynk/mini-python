@@ -103,12 +103,16 @@ let two_byte_operator_asm
 
 let c_standard_function_wrapper (fn_name : string) : X86_64.text =
   label (fn_name ^ "_wrapper")
+  ++ pushq (reg r8)
+  ++ pushq (reg r10)
   ++ pushq (reg rbp)
   ++ movq (reg rsp) (reg rbp)
   ++ andq (imm (-16)) (reg rsp)
   ++ call fn_name
   ++ movq (reg rbp) (reg rsp)
   ++ popq rbp
+  ++ popq r10
+  ++ popq r8
   ++ ret
 ;;
 
