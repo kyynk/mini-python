@@ -236,8 +236,8 @@ let type_file (env : env_t) ((defs, main_stmt) : Ast.file) : Ast.tfile =
       defs
   in
   (* type check the main function *)
-  let main_fn = { fn_name = "main"; fn_params = [] } in
-  let env = { env with funcs = StringMap.add "main" main_fn global_env.funcs } in
+  let main_fn = { fn_name = "__main"; fn_params = [] } in
+  let env = { env with funcs = StringMap.add "__main" main_fn global_env.funcs } in
   let tstmt, _ = type_stmt env main_stmt in
   let main_tdef = main_fn, tstmt in
   List.rev (main_tdef :: tdefs)

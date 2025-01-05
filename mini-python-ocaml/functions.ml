@@ -266,7 +266,7 @@ let func env : X86_64.text * X86_64.data =
     ++ movq !%rax !%rdx
     ++ xorq !%rcx !%rcx
     ++ label func_list_concat_first_loop
-    ++ cmpq !%rcx (ind ~ofs:byte rsi)
+    ++ cmpq !%rcx (ind ~ofs:byte rdi)
     ++ comment "first_list_cmp"
     ++ je func_list_concat_next_list
     ++ concat_list_store_reg
@@ -358,9 +358,13 @@ let func env : X86_64.text * X86_64.data =
     ++ addq !%r8 !%rdi
     ++ movq !%rdi !%rax
     ++ ret
-    ++ difference env func_difference_eq (movq (imm 1) !%rax ++ leave ++ ret)
-    ++ difference env func_difference_neq (movq (imm 1) !%rax ++ leave ++ ret)
-    ++ difference env func_difference_failure (jmp "runtime_error")
+    ++ difference env func_difference_eq (movq (imm 1) !%rax ++ leave ++ ret) nop
+    ++ difference env func_difference_neq (movq (imm 1) !%rax ++ leave ++ ret) nop
+    ++ difference
+         env
+         func_difference_failure
+         (jmp "runtime_error")
+         (cmpq (imm 0) !%r10 ++ je "runtime_error")
     ++ label runtime_error
     ++ leaq (lab "emit_runtime_error_msg") rdi
     ++ xorq !%rax !%rax

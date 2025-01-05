@@ -18,6 +18,17 @@ let unique_label (env : env_t) (prefix : string) : string =
   Printf.sprintf "%s%d" prefix counter
 ;;
 
+let repeat (n : int) (text : X86_64.text) : X86_64.text =
+  let rec repeat' n text = if n = 0 then nop else text ++ repeat' (n - 1) text in
+  repeat' n text
+;;
+
+let main_guard (function_name : string) : label =
+  match function_name with
+  | "main" -> 
+    "💥main"
+  | _ -> function_name
+  
 let arith_asm (code1 : X86_64.text) (code2 : X86_64.text) (instructions : X86_64.text)
   : X86_64.text
   =
@@ -37,7 +48,7 @@ let arith_asm (code1 : X86_64.text) (code2 : X86_64.text) (instructions : X86_64
   ++ jne "runtime_error"
   ++ instructions
   ++ pushq (reg rdi)
-  ++ movq (imm byte) (reg rdi)
+  ++ movq (imm (2 * byte)) (reg rdi)
   ++ call "malloc_wrapper"
   ++ popq rdi
   ++ movq (imm 2) (ind rax)
@@ -108,7 +119,14 @@ let bool_builder i =
   ++ movq (imm i) (ind ~ofs:byte rax)
 ;;
 
-let difference env fn_label instructions =
+let none_builder =
+  movq (imm (2 * byte)) !%rdi
+  ++ call "malloc_wrapper"
+  ++ movq (imm 0) (ind rax)
+  ++ movq (imm 0) (ind ~ofs:byte rax)
+;;
+
+let difference env fn_label instructions none_guard =
   let func_diff_ty_eq = unique_label env "func_diff_ty_eq" in
   let func_diff_value_bool_int = unique_label env "func_eq_value_bool_int" in
   let func_diff_value_string = unique_label env "func_eq_value_string" in
@@ -125,8 +143,7 @@ let difference env fn_label instructions =
   ++ je func_diff_ty_eq
   ++ instructions
   ++ label func_diff_ty_eq
-  ++ cmpq (imm 0) !%r10
-  ++ je "runtime_error"
+  ++ none_guard
   ++ cmpq (imm 2) !%r10
   ++ jle func_diff_value_bool_int
   ++ cmpq (imm 3) !%r10
