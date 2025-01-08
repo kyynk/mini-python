@@ -220,7 +220,7 @@
 # main()
 s = "4"
 
-# for i in list(range(3)):
-s = s + "1"
-s = s + "2"
+for i in list(range(80)):
+    s = s + "1"
+    s = s + "2"
 print(s)

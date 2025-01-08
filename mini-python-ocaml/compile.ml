@@ -124,13 +124,13 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ popq rdi
             ++ movq (ind ~ofs:(2 * byte) rdi) !%rdi
             ++ movq (ind ~ofs:(2 * byte) rsi) !%rsi
-            ++ pushq (ind rdi)
-            ++ pushq (ind rsi)
+            ++ pushq !%rdi
+            ++ pushq !%rsi
             ++ movq !%rdi !%rsi
             ++ movq !%rax !%rdi
-            ++ call "strcpy_wrapper"
-            ++ inline "\tpopq (%rsi)\n"
-            ++ inline "\tpopq (%rdi)\n"
+            ++ call "strcat_wrapper"
+            ++ popq rsi
+            ++ popq rdi
             ++ movq !%rax !%rdi
             ++ call "strcat_wrapper"
             ++ movq (imm (3 * byte)) !%rdi
