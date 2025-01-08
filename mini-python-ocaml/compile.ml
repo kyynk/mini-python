@@ -110,38 +110,35 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
             ++ movq (reg rdi) (ind ~ofs:byte rax)
             ++ jmp add_end
             ++ label add_string
-            ++ movq (ind ~ofs:byte rdi) !%r10
-            ++ addq (ind ~ofs:byte rsi) !%r10
-            ++ movq !%r10 !%rcx
-            ++ addq (imm 1) !%r10
+            ++ movq (ind ~ofs:byte rdi) !%rdx
+            ++ addq (ind ~ofs:byte rsi) !%rdx
+            ++ movq !%rdx !%rcx
+            ++ addq (imm 1) !%rdx
+            ++ imulq (imm byte) !%rdx
+            ++ pushq !%rcx
             ++ pushq !%rdi
             ++ pushq !%rsi
-            ++ pushq !%r10
-            ++ movq !%r10 !%rdi
+            ++ movq !%rdx !%rdi
             ++ call "malloc_wrapper"
-            ++ popq r10
             ++ popq rsi
             ++ popq rdi
             ++ movq (ind ~ofs:(2 * byte) rdi) !%rdi
             ++ movq (ind ~ofs:(2 * byte) rsi) !%rsi
-            ++ pushq !%rdi
-            ++ pushq !%rsi
-            ++ pushq !%rcx
+            ++ pushq (ind rdi)
+            ++ pushq (ind rsi)
             ++ movq !%rdi !%rsi
             ++ movq !%rax !%rdi
             ++ call "strcpy_wrapper"
-            ++ popq rcx
-            ++ popq rsi
-            ++ popq rdi
+            ++ inline "\tpopq (%rsi)\n"
+            ++ inline "\tpopq (%rdi)\n"
             ++ movq !%rax !%rdi
             ++ call "strcat_wrapper"
             ++ movq (imm (3 * byte)) !%rdi
             ++ movq !%rax !%rsi
             ++ pushq !%rsi
-            ++ pushq !%rcx
             ++ call "malloc_wrapper"
-            ++ popq rcx
             ++ popq rsi
+            ++ popq rcx
             ++ movq (imm 3) (ind rax)
             ++ movq !%rcx (ind ~ofs:byte rax)
             ++ movq !%rsi (ind ~ofs:(2 * byte) rax)
@@ -334,7 +331,7 @@ let rec compile_expr (env : env_t) (parent_env : env_t) (expr : Ast.texpr)
          (nop, nop, 0)
          (List.rev args)
        |> fun (var_text, var_data, local_var) ->
-       var_text ++ call (main_guard fn.fn_name) ++ repeat local_var (popq r10), var_data)
+       var_text ++ call (main_guard fn.fn_name) ++ repeat local_var (popq r15), var_data)
   | TElist l ->
     let len = List.length l in
     List.fold_left
